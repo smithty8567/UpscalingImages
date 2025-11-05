@@ -1,0 +1,4 @@
+/Datasets/Cartoon/
+__pycache__/
+cnn_model.pt
+model.pt
