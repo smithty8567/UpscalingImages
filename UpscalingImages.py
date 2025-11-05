@@ -22,6 +22,9 @@ class Upscaling(nn.Module):
       nn.Conv2d(in_channels=1, out_channels=32, kernel_size=1)
     )
 
+    self.norm1 = nn.BatchNorm2d(num_features=32)
+    self.norm2 = nn.BatchNorm2d(num_features=1)
+
     self.transformer1 = ST.TransformerEncoder(
       embedding_dim=embedding_dim,
       feedforward_dim=feedforward_dim,
@@ -38,7 +41,8 @@ class Upscaling(nn.Module):
     # Adding more channels to the image
     # print("BEFORE CONV", x.shape)
     x = self.initialConv(x)
-
+    x = self.norm1(x)
+    x = nn.functional.relu(x,inplace=True)
     # shape the image into patches
     # print("BEFORE PATCHES", x.shape)
     x = data.to_patches(x, self.patch_size)
@@ -47,6 +51,8 @@ class Upscaling(nn.Module):
     # print("Shape after transformer:", x.shape)
     x = data.to_image(x, self.patch_size)
     x = self.finalConvLayer(x)
+    x = self.norm2(x)
+    x = nn.functional.relu(x, inplace=True)
     return x
 
   @staticmethod
@@ -75,4 +81,4 @@ class Upscaling(nn.Module):
       print("Creating new model...")
       return Upscaling(), 0
 
-# torchinfo.summary(Upscaling(), input_size=(16,1,64,64))
+# torchinfo.summary(Upscaling(), input_size=(32,1,64,64))

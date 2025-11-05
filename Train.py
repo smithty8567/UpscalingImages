@@ -42,6 +42,12 @@ def train(epochs=1000, lr=0.001, save_every=100, loss_every=10, batch_size=32):
         print(f"Loss: {total_loss / n_losses}")
         total_loss = 0
         n_losses = 0
+        # figs, axs = plt.subplots(1,2)
+        # axs[0].axis("off")
+        # axs[1].axis("off")
+        # axs[0].imshow(output[0].cpu().detach().permute(1, 2, 0))
+        # axs[1].imshow(batch_target[0].cpu().detach().permute(1, 2, 0))
+        # plt.show()
 
       if batch % save_every == 0:
         print(f"Saving model at epoch {i+1} on batch {j}/{len(loader)}")
