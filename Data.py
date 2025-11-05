@@ -23,10 +23,10 @@ def to_image(patched_batch, patch_size):
     # Image Batch Shape: (Batch, Color Channels, Height, Width)
     batch = patched_batch.shape[0]
     color = patched_batch.shape[2] // (patch_size * patch_size)
-    height = patched_batch.shape[1]
-    width = patched_batch.shape[1]
+    height = patched_batch.shape[1] // 2
+    width = patched_batch.shape[1] // 2
 
-    image_batch = patched_batch.view(batch, color, height // patch_size, width // patch_size, patch_size, patch_size)
+    image_batch = patched_batch.view(batch, height // patch_size, width // patch_size, color, patch_size, patch_size)
     image_batch = image_batch.permute(0, 3, 1, 4, 2, 5)
     image_batch = image_batch.contiguous().view(batch, color, height, width)
     return image_batch
