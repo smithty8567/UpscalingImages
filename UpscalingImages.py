@@ -67,6 +67,7 @@ class Upscaling(nn.Module):
       params = checkpoint['params']
       model = Upscaling(*params)
       model.load_state_dict(checkpoint['state_dict'])
+      print(f"Loaded from checkpoint at epoch {checkpoint['epoch']}")
       return model, checkpoint['epoch']
     except Exception as e:
       print(f"Error loading checkpoint: {e}")

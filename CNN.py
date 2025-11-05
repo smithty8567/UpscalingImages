@@ -43,18 +43,19 @@ class CNNModel(nn.Module):
       data = torch.load(path, weights_only=True)
       model = CNNModel()
       model.load_state_dict(data['state_dict'])
+      print(f"Loaded from checkpoint at epoch {data['epoch']}")
       return model, data['epoch']
     except Exception as e:
       print(f"Error loading checkpoint: {e}")
       print("Creating new model...")
       return CNNModel(), 0
   
-def train(epochs=40, lr=0.001, save_every=1):
+def train(epochs=40, lr=0.001, save_every=50, batch_size=32):
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   dataset = UpscaleDataset()
   model, epoch = CNNModel.load("cnn_model.pt")
   model = model.to(device)
-  loader = DataLoader(dataset, batch_size=4, shuffle=True)
+  loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
   loss = nn.MSELoss()
   adam = optim.Adam(model.parameters(), lr=lr)
   total_loss = 0
@@ -62,6 +63,7 @@ def train(epochs=40, lr=0.001, save_every=1):
 
   for i in range(epoch, epochs):
     print(f"Epoch {i+1}")
+    batch = 0
     for batch_input, batch_target in tqdm.tqdm(loader):
       batch_input = batch_input.to(device)
       batch_target = batch_target.to(device)
@@ -72,11 +74,13 @@ def train(epochs=40, lr=0.001, save_every=1):
       n_losses += 1
       loss_val.backward()
       adam.step()
-    if (i+1) % save_every == 0:
-      print(f"Saving model at epoch {i+1} with loss {total_loss/n_losses}")
-      CNNModel.save(model, "cnn_model.pt", i)
-      total_loss = 0
-      n_losses = 0
+      
+      batch += 1
+      if batch % save_every == 0:
+        print(f" Saving model at epoch {i+1} on batch {batch}/{len(dataset)/4} with loss {total_loss/n_losses}")
+        CNNModel.save(model, "cnn_model.pt", i)
+        total_loss = 0
+        n_losses = 0
 
 def test():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
