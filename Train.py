@@ -10,11 +10,11 @@ import torch
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-def train(epochs=1000, lr=0.001, save_every=200, loss_every=10, batch_size=32):
+def train(epochs=1000, lr=0.0001, save_every=200, loss_every=50, batch_size=32):
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   print(f"Device: {device}")
 
-  dataset = UpscaleDataset()
+  dataset = UpscaleDataset(samples=10)
   model, epoch = Upscaling.load("model.pt")
   model = model.to(device)
   loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -22,10 +22,9 @@ def train(epochs=1000, lr=0.001, save_every=200, loss_every=10, batch_size=32):
   adam = optim.Adam(model.parameters(), lr=lr)
   total_loss = 0
   n_losses = 0
-
+  batch = 0
   for i in range(epoch, epochs):
     print(f"Epoch {i+1}")
-    batch = 0
     for batch_input, batch_target in loader:
       batch_input = batch_input.to(device)
       batch_target = batch_target.to(device)
@@ -43,6 +42,12 @@ def train(epochs=1000, lr=0.001, save_every=200, loss_every=10, batch_size=32):
         print(f"Loss: {total_loss / n_losses}")
         total_loss = 0
         n_losses = 0
+        # figs, axs = plt.subplots(1,2)
+        # axs[0].axis("off")
+        # axs[1].axis("off")
+        # axs[0].imshow(output[0].cpu().detach().permute(1, 2, 0))
+        # axs[1].imshow(batch_target[0].cpu().detach().permute(1, 2, 0))
+        # plt.show()
 
       if batch % save_every == 0:
         print(f"Saving model at epoch {i+1} on batch {batch}/{len(loader)}")

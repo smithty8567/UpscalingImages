@@ -23,10 +23,10 @@ def to_image(patched_batch, patch_size):
     # Image Batch Shape: (Batch, Color Channels, Height, Width)
     batch = patched_batch.shape[0]
     color = patched_batch.shape[2] // (patch_size * patch_size)
-    height = patched_batch.shape[1] // 2
-    width = patched_batch.shape[1] // 2
+    height = int((patched_batch.shape[1] ** 0.5) * (patch_size))
+    width = int((patched_batch.shape[1] ** 0.5) * (patch_size))
 
-    image_batch = patched_batch.view(batch, height // patch_size, width // patch_size, color, patch_size, patch_size)
+    image_batch = patched_batch.view(batch, height//patch_size, width//patch_size, color, patch_size, patch_size)
     image_batch = image_batch.permute(0, 3, 1, 4, 2, 5)
     image_batch = image_batch.contiguous().view(batch, color, height, width)
     return image_batch
@@ -35,7 +35,7 @@ def process_image(path, process_size, out_size, color):
     if color:
         # Reads image, normalizes, coverts to RGB
         image = cv2.imread(path)[100:400, 100:400, ::-1]
-        image = image / 255 * 2 - 1
+        image = image / 255
 
         # Resizes image and permutes image to (Color, Height, Width)
         processed_image = torch.tensor(cv2.resize(image, (process_size, process_size)), dtype=torch.float32)
@@ -50,7 +50,7 @@ def process_image(path, process_size, out_size, color):
     else:
         # Reads image, normalizes, converts to grayscale
         image = (cv2.imread(path, cv2.IMREAD_GRAYSCALE)[100:400, 100:400])
-        image = image / 255 * 2 - 1
+        image = image / 255
 
         # Resizes image and converts to tensor
         processed_image =  torch.tensor(cv2.resize(image, (process_size, process_size)), dtype=torch.float32)
@@ -117,7 +117,13 @@ class UpscaleDataset(Dataset):
 
 # load = DataLoader(data, batch_size=4, shuffle=True)
 #
-# for batch, _ in load:
+# for input, target in load:
+#     print("Initial image shape:",target.shape)
+#     patches = to_patches(target,8)
+#     print("Patches shape:",patches.shape)
+#     images = to_image(patches,8)
+#     print("Images shape:", images.shape)
+#     exit(2)
 #     print(batch.shape)
 #     print(to_patches(batch, 8).shape, '\n')
 #
