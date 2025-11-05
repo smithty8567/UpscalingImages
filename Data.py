@@ -12,10 +12,16 @@ def to_patches(image_batch, patch_size):
     color = image_batch.shape[1]
     height, width = image_batch.shape[-2:]
 
+    # (B, C, H, W)
     patched_batch = image_batch.view(batch, color, height // patch_size, patch_size, width // patch_size, patch_size)
+    
+    # (B, C, H/P, P, W/P, P)
     patched_batch = patched_batch.permute(0, 2, 4, 1, 3, 5)
+    
+    # (B, H/P, W/P, C, P, P)
     patched_batch = patched_batch.contiguous().view(batch, height // patch_size * width // patch_size,
                                                         color * patch_size ** 2)
+    # (B, H/P*W/P, C*P*P)
     return patched_batch
 
 def to_image(patched_batch, patch_size):
@@ -23,12 +29,21 @@ def to_image(patched_batch, patch_size):
     # Image Batch Shape: (Batch, Color Channels, Height, Width)
     batch = patched_batch.shape[0]
     color = patched_batch.shape[2] // (patch_size * patch_size)
-    height = patched_batch.shape[1] // 2
-    width = patched_batch.shape[1] // 2
+    height = patched_batch.shape[1] * (patch_size * patch_size)
+    width = patched_batch.shape[1] * (patch_size * patch_size)
+    height = int(height ** 0.5)
+    width = int(width ** 0.5)
 
+    # (B, H/P, W/P, C*P*P)
     image_batch = patched_batch.view(batch, height // patch_size, width // patch_size, color, patch_size, patch_size)
+    
+    # (B, H/P, W/P, C, P, P)
     image_batch = image_batch.permute(0, 3, 1, 4, 2, 5)
+    
+    # (B, C, H/P, P, W/P, P)
     image_batch = image_batch.contiguous().view(batch, color, height, width)
+    
+    # (B, C, H, W)
     return image_batch
 
 def process_image(path, process_size, out_size, color):
@@ -104,22 +119,26 @@ class UpscaleDataset(Dataset):
         image = self.directories[idx]
         return process_image(image, self.in_size, self.out_size, self.color)
 
-# data = UpscaleDataset(color = False, samples = 100)
+data = UpscaleDataset(color = False, samples = 100)
+
 # im = data.__getitem__(0)[1]
 # im = im.permute(1, 2, 0)
 # plt.imshow(im, cmap='gray')
 # plt.show()
-#
+
 # im = data.__getitem__(0)[0]
 # im = im.permute(1, 2, 0)
 # plt.imshow(im, cmap='gray')
 # plt.show()
 
 # load = DataLoader(data, batch_size=4, shuffle=True)
-#
 # for batch, _ in load:
-#     print(batch.shape)
-#     print(to_patches(batch, 8).shape, '\n')
+#     batch2 = to_image(to_patches(batch, 8), 8)
+#     im = batch2[0].permute(1, 2, 0)
+#     plt.imshow(im, cmap='gray')
+#     plt.show()
+    # print(batch.shape)
+    # print(to_patches(batch, 8).shape, '\n')
 #
 # data = UpscaleDataset(color = True, samples = 100)
 # load = DataLoader(data, batch_size=4, shuffle=True)
