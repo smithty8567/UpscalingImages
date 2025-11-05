@@ -11,7 +11,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 def test():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-  dataset = UpscaleDataset(samples=10)
+  dataset = UpscaleDataset()
   model, epoch = Upscaling.load("model.pt")
   model = model.to(device)
   loader = DataLoader(dataset, batch_size=4, shuffle=True)
@@ -26,8 +26,8 @@ def test():
       target_image = batch_target.cpu().permute(0, 2, 3, 1)[0].detach().numpy()
       output_image = output.cpu().permute(0, 2, 3, 1)[0].detach().numpy()
       fig, axs = plt.subplots(1, 2)
-      axs[0].imshow(output_image, cmap="gray")
-      axs[1].imshow(target_image, cmap="gray")
+      axs[0].imshow((output_image + 1) / 2, cmap="gray")
+      axs[1].imshow((target_image + 1) / 2, cmap="gray")
       plt.show()
 
 test()

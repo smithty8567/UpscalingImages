@@ -43,7 +43,7 @@ class CNNModel(nn.Module):
       data = torch.load(path, weights_only=True)
       model = CNNModel()
       model.load_state_dict(data['state_dict'])
-      print(f"Loaded from checkpoint at epoch {data['epoch']}")
+      print(f"Loaded from checkpoint at epoch {data['epoch'] + 1}")
       return model, data['epoch']
     except Exception as e:
       print(f"Error loading checkpoint: {e}")
