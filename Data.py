@@ -35,7 +35,7 @@ def process_image(path, process_size, out_size, color):
     if color:
         # Reads image, normalizes, coverts to RGB
         image = cv2.imread(path)[100:400, 100:400, ::-1]
-        image = image / 255 * 2
+        image = image / 255 * 2 - 1
 
         # Resizes image and permutes image to (Color, Height, Width)
         processed_image = torch.tensor(cv2.resize(image, (process_size, process_size)), dtype=torch.float32)
@@ -50,7 +50,7 @@ def process_image(path, process_size, out_size, color):
     else:
         # Reads image, normalizes, converts to grayscale
         image = (cv2.imread(path, cv2.IMREAD_GRAYSCALE)[100:400, 100:400])
-        image = image / 255 * 2
+        image = image / 255 * 2 - 1
 
         # Resizes image and converts to tensor
         processed_image =  torch.tensor(cv2.resize(image, (process_size, process_size)), dtype=torch.float32)
