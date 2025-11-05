@@ -50,7 +50,7 @@ class CNNModel(nn.Module):
       print("Creating new model...")
       return CNNModel(), 0
   
-def train(epochs=40, lr=0.001, save_every=50, batch_size=32):
+def train(epochs=10000, lr=0.001, save_every=50, batch_size=16):
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   dataset = UpscaleDataset()
   model, epoch = CNNModel.load("cnn_model.pt")
@@ -99,9 +99,9 @@ def test():
       target_image = batch_target.cpu().permute(0, 2, 3, 1)[0].detach().numpy()
       output_image = output.cpu().permute(0, 2, 3, 1)[0].detach().numpy()
       fig, axs = plt.subplots(1, 2)
-      axs[0].imshow(output_image, cmap="gray")
-      axs[1].imshow(target_image, cmap="gray")
+      axs[0].imshow((output_image + 1) / 2, cmap="gray")
+      axs[1].imshow((target_image + 1) / 2, cmap="gray")
       plt.show()
 
-train()
-# test()
+# train()
+test()
