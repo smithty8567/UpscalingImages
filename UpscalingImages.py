@@ -12,55 +12,89 @@ import Data as data
 # Transformer-based Upscaling Model
 # ===============================
 class Upscaling(nn.Module):
-  def __init__(self, embedding_dim=2048, num_layers=4, num_heads=4, patch_size=8, channel_size = 8):
+  def __init__(self, num_layers=4, num_heads=4, patch_size=8, multiply_channel = 8):
     super().__init__()
 
-    channels = [channel_size, channel_size * 2, channel_size * 4]
-    self.params = [embedding_dim, num_layers, num_heads, patch_size,channel_size]
+    # Embedding dimension is patch_size * patch_size * num_channels
+    # num_channels = channel_size * 4
+
+    init_channels = 1 # Gray scale
+    channels = [multiply_channel, multiply_channel * 2, multiply_channel * 4, multiply_channel * 8]
+    self.params = [num_layers, num_heads, patch_size,multiply_channel]
     self.patch_size = patch_size
     self.initialConv = nn.Sequential(
-        nn.Conv2d(in_channels=1, out_channels=channels[0], kernel_size=3, padding=1),
+        nn.Conv2d(in_channels=init_channels, out_channels=channels[0], kernel_size=3, padding=1),
         nn.BatchNorm2d(num_features=channels[0]),
         nn.ReLU(inplace=True),
-        nn.Conv2d(in_channels=channels[0], out_channels=channels[1], kernel_size=3, padding=1),
+        nn.Conv2d(in_channels=channels[0], out_channels=channels[1], kernel_size=3, padding=1, stride = 2),
         nn.BatchNorm2d(num_features=channels[1]),
         nn.ReLU(inplace=True),
-        nn.Conv2d(in_channels=channels[1], out_channels=channels[2], kernel_size=3, padding=1),
+        nn.Conv2d(in_channels=channels[1], out_channels=channels[2], kernel_size=3, padding=1, stride= 2),
         nn.BatchNorm2d(num_features=channels[2]),
         nn.ReLU(inplace=True)
     )
 
+    embedding_dim = patch_size * patch_size * channels[2]
     self.transformer1 = ST.TransformerEncoder(
       embedding_dim=embedding_dim,
-      feedforward_dim=embedding_dim*4,
+      feedforward_dim=embedding_dim * 2,
       num_layers=num_layers,
       num_heads=num_heads
     )
+    self.convLayer2 = nn.Sequential(
+      nn.Conv2d(in_channels=channels[2], out_channels=channels[3], kernel_size=3, padding=1),
+      nn.BatchNorm2d(num_features=channels[3]),
+      nn.ReLU(inplace=True),
+      nn.ConvTranspose2d(channels[3], channels[3], kernel_size=3, stride=2, padding=1, output_padding=1),
+      nn.BatchNorm2d(num_features=channels[3]),
+      nn.ReLU(inplace=True),
+    )
+
+    embedding_dim = patch_size * patch_size * channels[-1]
+    self.transformer2 = ST.TransformerEncoder(
+      embedding_dim=embedding_dim,
+      feedforward_dim=embedding_dim // 4,
+      num_layers=num_layers// num_layers,
+      num_heads=num_heads
+    )
     self.finalConvLayer = nn.Sequential(
-      nn.Conv2d(in_channels=channels[2], out_channels=channels[1], kernel_size=3, padding=1),
+      nn.Conv2d(in_channels=channels[3], out_channels=channels[1], kernel_size=3, padding=1),
       nn.BatchNorm2d(num_features=channels[1]),
       nn.ReLU(inplace=True),
-      nn.Conv2d(in_channels=channels[1], out_channels=1, kernel_size=3, padding=1),
-      nn.ConvTranspose2d(1,1,kernel_size=3,stride=2, padding=1, output_padding=1),
-      nn.BatchNorm2d(num_features=1),
+      nn.Conv2d(in_channels=channels[1], out_channels=init_channels, kernel_size=3, padding=1),
+      nn.ConvTranspose2d(init_channels,init_channels,kernel_size=5,stride=4, padding=1, output_padding=1),
+      nn.BatchNorm2d(num_features=init_channels),
+      nn.ReLU(inplace=True),
+      nn.ConvTranspose2d(init_channels, init_channels, kernel_size=3, stride=2, padding=1, output_padding=1),
+      nn.BatchNorm2d(num_features=init_channels),
       nn.ReLU(inplace=True),
     )
 
   def forward(self, x):
 
     # Adding more channels to the image
-    # print("BEFORE CONV", x.shape)
-    x = self.initialConv(x)
+    x = self.initialConv(x) # (32, 1, 64, 64) --> (32, 32, 64, 64)
+    # print("After CONV", x.shape)
 
-    # shape the image into patches
-    # print("BEFORE PATCHES", x.shape)
-    x = data.to_patches(x, self.patch_size)
-    # print("Shape before transformer:", x.shape)
-    x = self.transformer1(x)
+    x = data.to_patches(x, self.patch_size) # (32, 32, 64, 64) --> (32, 64, 2048)
+    # print("After PATCHES", x.shape)
+    x = self.transformer1(x) # (32, 64, 2048)
     # print("Shape after transformer:", x.shape)
+    x = data.to_image(x, self.patch_size) # (32, 64, 2048) --> (32, 32, 64, 64)
+    # print("Back into image:", x.shape)
+    x = self.convLayer2(x) # (32, 32, 64, 64) --> (32, 64, 64, 64)
+    # print("After 2nd conv:", x.shape)
 
-    x = data.to_image(x, self.patch_size)
-    x = self.finalConvLayer(x)
+
+    x = data.to_patches(x, self.patch_size) # (32, 64, 64, 64) --> (32, 64, 4096)
+    # print("After patches again:", x.shape)
+    x = self.transformer2(x) # (32, 64, 4096)
+    # print("After 2nd transformer:", x.shape)
+    x = data.to_image(x, self.patch_size) # (32, 64, 4096) --> (32, 64, 64, 64)
+    # print("Image again:", x.shape)
+    x = self.finalConvLayer(x) # (32, 64, 64, 64) --> (32, 1, 128, 128
+    # print("final image shape:", x.shape)
+
     return x
 
   @staticmethod

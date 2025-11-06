@@ -11,7 +11,7 @@ import tqdm
 import torch
 
 
-def train(epochs=300, lr=0.0001, save_every=2, loss_every=2, batch_size=32):
+def train(epochs=300, lr=0.0001, save_every=1, loss_every=1, batch_size=32):
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   print(f"Device: {device}")
 
@@ -55,7 +55,7 @@ def train(epochs=300, lr=0.0001, save_every=2, loss_every=2, batch_size=32):
       print("Model is saving...")
       Upscaling.save(model, "model2.pt", i)
 
-def validate(test_loader= 'Datasets/Cartoon/Test', samples = 5000):
+def validate(test_loader= 'Datasets/Cartoon/Train', samples = 10000):
     dataset = UpscaleDataset(samples=samples, filepath = test_loader)
     model, epoch = Upscaling.load("model2.pt")
     cnn_model, epoch2 = CNNModel.load("cnn_model.pt")
@@ -64,7 +64,7 @@ def validate(test_loader= 'Datasets/Cartoon/Test', samples = 5000):
         with torch.no_grad():
             output = model(batch_input)
             output2 = cnn_model(batch_input)
-            figs, axs = plt.subplots(1, 3,figsize=(15, 4))
+            figs, axs = plt.subplots(1, 3)
             axs[0].axis("off")
             axs[1].axis("off")
             axs[2].axis("off")

@@ -91,7 +91,7 @@ class UpscaleDataset(Dataset):
             __getitem__ (int): processed image and original image from index.
         """
 
-    def __init__(self, filepath = 'Datasets/Cartoon/Train', in_size = 64, out_size = 128, color = False, samples=90000):
+    def __init__(self, filepath = 'Datasets/Cartoon/Train', in_size = 64, out_size = 256, color = False, samples=90000):
         self.directories = generate_directory_list(filepath, samples)
         self.in_size = in_size
         self.out_size = out_size
