@@ -24,6 +24,12 @@ def get_model_input(input: torch.Tensor):
   input = torch.from_numpy(y).unsqueeze(2).permute(2, 0, 1).unsqueeze(0)
   return input, cv2.resize(cbcr, (cbcr.shape[0] * 2, cbcr.shape[1] * 2))
 
+def get_model_output(y: torch.Tensor, cbcr: np.ndarray):
+  ycbcr = np.concatenate((y.cpu().permute(0, 2, 3, 1)[0].detach().numpy(), cbcr), axis=2)
+  output_image = ycbcr_to_rgb(ycbcr)
+  output_image = output_image.clip(0, 1)
+  return output_image
+
 def test():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   dataset = UpscaleDataset('Datasets/Cartoon/Test', color=True)
@@ -40,12 +46,8 @@ def test():
       y = y.to(device)
       output_y_vit = vit_model(y)
       output_y_cnn = cnn_model(y)
-      output_ycbcr_vit = np.concatenate((output_y_vit.cpu().permute(0, 2, 3, 1)[0].detach().numpy(), cbcr), axis=2)
-      output_ycbcr_cnn = np.concatenate((output_y_cnn.cpu().permute(0, 2, 3, 1)[0].detach().numpy(), cbcr), axis=2)
-      output_image_vit = ycbcr_to_rgb(output_ycbcr_vit)
-      output_image_cnn = ycbcr_to_rgb(output_ycbcr_cnn)
-      output_image_vit = output_image_vit.clip(0, 1)
-      output_image_cnn = output_image_cnn.clip(0, 1)
+      output_image_vit = get_model_output(output_y_vit, cbcr)
+      output_image_cnn = get_model_output(output_y_cnn, cbcr)
       
       # Showing current model output compared to target image
       target_image = target[i].permute(1, 2, 0).detach().numpy()
