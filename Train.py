@@ -14,7 +14,7 @@ def train(epochs=1000, lr=0.001, save_every=100, loss_every=10, batch_size=32):
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   print(f"Device: {device}")
 
-  dataset = UpscaleDataset()
+  dataset = UpscaleDataset(samples=5)
   model, epoch = Upscaling.load("model.pt")
   model = model.to(device)
   loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -25,7 +25,8 @@ def train(epochs=1000, lr=0.001, save_every=100, loss_every=10, batch_size=32):
   batch = 0
 
   for i in range(epoch, epochs):
-    for j, (batch_input, batch_target) in enumerate(loader):
+    prog_bar = tqdm.tqdm(loader)
+    for j, (batch_input, batch_target) in enumerate(prog_bar):
       batch_input = batch_input.to(device)
       batch_target = batch_target.to(device)
       adam.zero_grad()
@@ -38,7 +39,7 @@ def train(epochs=1000, lr=0.001, save_every=100, loss_every=10, batch_size=32):
       batch += 1
 
       if batch % loss_every == 0:
-        print(f"Loss: {(total_loss / n_losses):0.4f}")
+        prog_bar.set_postfix(loss=f"{(total_loss / n_losses):0.4f}")
         total_loss = 0
         n_losses = 0
 
