@@ -2,8 +2,8 @@ from UpscalingImages import Upscaling
 from Data import UpscaleDataset
 from torch.utils.data import DataLoader
 from torch import optim, nn
+from tqdm import tqdm
 import matplotlib.pyplot as plt
-import tqdm
 import torch
 
 # Used strictly for development to see the images
@@ -25,7 +25,7 @@ def train(epochs=1000, lr=0.0002, save_every=1000, loss_every=100, batch_size=32
   batch = 0
 
   for i in range(epoch, epochs):
-    prog_bar = tqdm.tqdm(loader)
+    prog_bar = tqdm(loader)
     for j, (batch_input, batch_target) in enumerate(prog_bar):
       batch_input = batch_input.to(device)
       batch_target = batch_target.to(device)

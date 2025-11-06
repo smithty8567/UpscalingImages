@@ -8,6 +8,7 @@ import os
 import Transformer as ST
 import Data as data
 
+
 # ===============================
 # Transformer-based Upscaling Model
 # ===============================
@@ -28,10 +29,6 @@ class Upscaling(nn.Module):
       nn.ReLU(inplace=True),
     )
 
-    self.patch_norm = nn.LayerNorm(32 * patch_size * patch_size)
-    self.patch_embed = nn.Linear(32 * patch_size * patch_size, embedding_dim)
-    self.patch_unembed = nn.Linear(embedding_dim, 32 * patch_size * patch_size)
-
     self.transformer1 = ST.TransformerEncoder(
       embedding_dim=embedding_dim,
       feedforward_dim=feedforward_dim,
@@ -47,15 +44,11 @@ class Upscaling(nn.Module):
     )
 
   def forward(self, x):
-
     x = self.initialConv(x)
     x = data.to_patches(x, self.patch_size)
     
-    # x = self.patch_norm(x)
-    # x = self.patch_embed(x)
     x = self.transformer1(x)
-    # x = self.patch_unembed(x)
-
+    
     x = data.to_image(x, self.patch_size)
     x = self.finalConvLayer(x)
     return x
