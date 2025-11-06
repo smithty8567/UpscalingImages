@@ -1,4 +1,8 @@
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 from UpscalingImages import Upscaling
+from CNN import CNNModel
 from Data import UpscaleDataset
 from torch.utils.data import DataLoader
 from torch import optim, nn
@@ -6,9 +10,6 @@ import matplotlib.pyplot as plt
 import tqdm
 import torch
 
-# Used strictly for development to see the images
-import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 def train(epochs=300, lr=0.0001, save_every=2, loss_every=2, batch_size=32):
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -56,21 +57,27 @@ def train(epochs=300, lr=0.0001, save_every=2, loss_every=2, batch_size=32):
 
 def validate(test_loader= 'Datasets/Cartoon/Test', samples = 5000):
     dataset = UpscaleDataset(samples=samples, filepath = test_loader)
-    model, epoch = Upscaling.load("model.pt")
+    model, epoch = Upscaling.load("model1.pt")
+    cnn_model, epoch2 = CNNModel.load("cnn_model.pt")
     loader = DataLoader(dataset, batch_size=32, shuffle=True)
     for batch_input, batch_target in loader:
-        torch.no_grad()
-        output = model(batch_input)
-        figs, axs = plt.subplots(1, 2)
-        axs[0].axis("off")
-        axs[1].axis("off")
-        axs[0].imshow(output[0].cpu().detach().permute(1, 2, 0), cmap="gray")
-        axs[1].imshow(batch_target[0].cpu().detach().permute(1, 2, 0), cmap="gray")
-        plt.show()
+        with torch.no_grad():
+            output = model(batch_input)
+            output2 = cnn_model(batch_input)
+            figs, axs = plt.subplots(1, 3,figsize=(15, 4))
+            axs[0].axis("off")
+            axs[1].axis("off")
+            axs[2].axis("off")
 
-        # Just testing to look at one image
-        exit(2)
+            axs[0].set_title("Transformer")
+            axs[1].set_title("Original")
+            axs[2].set_title("Bicubic")
+
+            axs[0].imshow(output[0].cpu().detach().squeeze(), cmap="gray")
+            axs[1].imshow(batch_target[0].cpu().detach().squeeze(), cmap="gray")
+            axs[2].imshow(output2[0].cpu().detach().squeeze(), cmap="gray")
+            plt.show()
 
 
-train()
+# train()
 validate()

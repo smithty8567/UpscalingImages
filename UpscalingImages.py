@@ -56,7 +56,6 @@ class Upscaling(nn.Module):
     # Adding more channels to the image
     # print("BEFORE CONV", x.shape)
     x = self.initialConv(x)
-    x = nn.functional.relu(x,inplace=True)
 
     # shape the image into patches
     # print("BEFORE PATCHES", x.shape)
@@ -95,4 +94,4 @@ class Upscaling(nn.Module):
       print("Creating new model...")
       return Upscaling(), 0
 
-torchinfo.summary(Upscaling(), input_size=(32,1,64,64))
+# torchinfo.summary(Upscaling(), input_size=(32,1,64,64))
