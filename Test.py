@@ -1,3 +1,4 @@
+from CNN import CNNModel
 from UpscalingImages import Upscaling
 from Data import UpscaleDataset
 from torch.utils.data import DataLoader
@@ -27,8 +28,10 @@ def get_model_input(input: torch.Tensor):
 def test():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   dataset = UpscaleDataset('Datasets/Cartoon/Test', color=True)
-  model, epoch = Upscaling.load("model.pt")
-  model = model.to(device)
+  vit_model, _ = Upscaling.load("model.pt")
+  cnn_model, _ = CNNModel.load("cnn_model.pt")
+  vit_model = vit_model.to(device)
+  cnn_model = cnn_model.to(device)
   loader = DataLoader(dataset, batch_size=100, shuffle=True)
   input, target = loader.__iter__().__next__()
 
@@ -36,21 +39,32 @@ def test():
     for i in range(input.shape[0]):
       y, cbcr = get_model_input(input[i])
       y = y.to(device)
-      output_y = model(y)
-      output_ycbcr = np.concatenate((output_y.cpu().permute(0, 2, 3, 1)[0].detach().numpy(), cbcr), axis=2)
-      output_image = ycbcr_to_rgb(output_ycbcr)
+      output_y_vit = vit_model(y)
+      output_y_cnn = cnn_model(y)
+      output_ycbcr_vit = np.concatenate((output_y_vit.cpu().permute(0, 2, 3, 1)[0].detach().numpy(), cbcr), axis=2)
+      output_ycbcr_cnn = np.concatenate((output_y_cnn.cpu().permute(0, 2, 3, 1)[0].detach().numpy(), cbcr), axis=2)
+      output_image_vit = ycbcr_to_rgb(output_ycbcr_vit)
+      output_image_cnn = ycbcr_to_rgb(output_ycbcr_cnn)
+      output_image_vit = output_image_vit.clip(0, 1)
+      output_image_cnn = output_image_cnn.clip(0, 1)
       
       # Showing current model output compared to target image
       target_image = target[i].permute(1, 2, 0).detach().numpy()
       input_image = input[i].permute(1, 2, 0).detach().numpy()
-      bicubic_image = cv2.resize(input_image, (input_image.shape[0] * 2, input_image.shape[1] * 2))
-      fig, axs = plt.subplots(1, 3)
-      axs[0].imshow((target_image + 1) / 2)
-      axs[1].imshow((output_image + 1) / 2)
-      axs[2].imshow((bicubic_image + 1) / 2)
-      axs[0].set_title('Original')
-      axs[1].set_title('Upscaled')
-      axs[2].set_title('Bicubic')
+      downscaled_image = cv2.resize(input_image, (input_image.shape[0] * 2, input_image.shape[1] * 2), interpolation=cv2.INTER_NEAREST)
+      fig, axs = plt.subplots(1, 4, sharey=True)
+      axs[0].imshow((downscaled_image + 1) / 2)
+      axs[1].imshow((target_image + 1) / 2)
+      axs[2].imshow((output_image_vit + 1) / 2)
+      axs[3].imshow((output_image_cnn + 1) / 2)
+      axs[0].set_title('Downscaled')
+      axs[1].set_title('Original')
+      axs[2].set_title('Upscaled (VIT)')
+      axs[3].set_title('Upscaled (CNN)')
+      for i in range(4):
+        axs[i].set_xticks([])
+        axs[i].set_yticks([])
+      plt.subplots_adjust(wspace=0, hspace=0)
       plt.show()
 
 test()
