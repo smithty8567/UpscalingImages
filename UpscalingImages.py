@@ -12,7 +12,7 @@ import Data as data
 # Transformer-based Upscaling Model
 # ===============================
 class Upscaling(nn.Module):
-  def __init__(self, num_layers=4, num_heads=4, patch_size=8, multiply_channel = 8):
+  def __init__(self, num_layers=5, num_heads=4, patch_size=8, multiply_channel = 8):
     super().__init__()
 
     # Embedding dimension is patch_size * patch_size * num_channels
@@ -37,7 +37,7 @@ class Upscaling(nn.Module):
     embedding_dim = patch_size * patch_size * channels[2]
     self.transformer1 = ST.TransformerEncoder(
       embedding_dim=embedding_dim,
-      feedforward_dim=embedding_dim * 2,
+      feedforward_dim=embedding_dim * 4,
       num_layers=num_layers,
       num_heads=num_heads
     )
@@ -53,8 +53,8 @@ class Upscaling(nn.Module):
     embedding_dim = patch_size * patch_size * channels[-1]
     self.transformer2 = ST.TransformerEncoder(
       embedding_dim=embedding_dim,
-      feedforward_dim=embedding_dim // 4,
-      num_layers=num_layers// num_layers,
+      feedforward_dim=embedding_dim * 2 ,
+      num_layers=num_layers // num_layers,
       num_heads=num_heads
     )
     self.finalConvLayer = nn.Sequential(
@@ -124,4 +124,4 @@ class Upscaling(nn.Module):
       print("Creating new model...")
       return Upscaling(), 0
 
-# torchinfo.summary(Upscaling(), input_size=(32,1,64,64))
+torchinfo.summary(Upscaling(), input_size=(32,1,64,64))

@@ -43,41 +43,35 @@ def train(epochs=300, lr=0.0001, save_every=1, loss_every=1, batch_size=32):
       print(f"Loss: {total_loss / n_losses}")
       total_loss = 0
       n_losses = 0
-      # figs, axs = plt.subplots(1,2)
-      # axs[0].axis("off")
-      # axs[1].axis("off")
-      # axs[0].imshow(output[0].cpu().detach().permute(1, 2, 0))
-      # axs[1].imshow(batch_target[0].cpu().detach().permute(1, 2, 0))
-      # plt.show()
 
     if (i+1) % save_every == 0:
       # print(f"Saving model at epoch {i+1} on batch {batch}/{len(loader)}")
       print("Model is saving...")
       Upscaling.save(model, "model2.pt", i)
 
-def validate(test_loader= 'Datasets/Cartoon/Train', samples = 10000):
+def validate(test_loader= 'Datasets/Cartoon/Train', samples = 90000):
     dataset = UpscaleDataset(samples=samples, filepath = test_loader)
     model, epoch = Upscaling.load("model2.pt")
-    cnn_model, epoch2 = CNNModel.load("cnn_model.pt")
+    # cnn_model, epoch2 = CNNModel.load("cnn_model.pt")
     loader = DataLoader(dataset, batch_size=32, shuffle=True)
     for batch_input, batch_target in loader:
         with torch.no_grad():
             output = model(batch_input)
-            output2 = cnn_model(batch_input)
-            figs, axs = plt.subplots(1, 3)
+            # output2 = cnn_model(batch_input)
+            figs, axs = plt.subplots(1, 2)
             axs[0].axis("off")
             axs[1].axis("off")
-            axs[2].axis("off")
+            # axs[2].axis("off")
 
             axs[0].set_title("Transformer")
             axs[1].set_title("Original")
-            axs[2].set_title("Bicubic")
+            # axs[2].set_title("CNN")
 
             axs[0].imshow(output[0].cpu().detach().squeeze(), cmap="gray")
             axs[1].imshow(batch_target[0].cpu().detach().squeeze(), cmap="gray")
-            axs[2].imshow(output2[0].cpu().detach().squeeze(), cmap="gray")
+            # axs[2].imshow(output2[0].cpu().detach().squeeze(), cmap="gray")
             plt.show()
 
 
-train()
-# validate()
+# train()
+validate()
