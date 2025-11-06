@@ -11,21 +11,20 @@ import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
-def train(epochs=1000, lr=0.001, save_every=10, loss_every=1, batch_size=64):
+def train(epochs=1000, lr=0.002, save_every=10, batch_size=64):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    dataset = UpscaleDataset(samples = 100)
+    dataset = UpscaleDataset(samples = 1000)
     model, epoch = Upscaling.load("model.pt")
     model = model.to(device)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    loss_function = nn.MSELoss()
+    loss_fn = nn.MSELoss()
     adam = optim.Adam(model.parameters(), lr=lr)
 
     for i in range(epoch, epochs):
         progress_bar = tqdm(loader, desc=f"Epoch {i + 1}/{epochs}")
         # print(f"Epoch {i+1}")
-        counter = 0
         running_loss = 0.0
 
         for j, batch in enumerate(progress_bar):
@@ -36,17 +35,13 @@ def train(epochs=1000, lr=0.001, save_every=10, loss_every=1, batch_size=64):
             adam.zero_grad()
             output = model(batch_input)
 
-            loss = loss_function(output, batch_target)
+            loss = loss_fn(output, batch_target)
             running_loss += loss.item()
 
             loss.backward()
             adam.step()
 
-            counter += 1
-
-            if counter % loss_every == 0:
-                progress_bar.set_postfix({"Loss:": loss.item()})
-                total_loss = 0
+            progress_bar.set_postfix({"Loss:": loss.item()})
 
         if i % save_every == 0:
             print(f"Saving model at epoch {i + 1}")
