@@ -83,7 +83,8 @@ class Upscaling(nn.Module):
   @staticmethod
   def load(path):
     try:
-      checkpoint = torch.load(path, weights_only=True)
+      device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+      checkpoint = torch.load(path, map_location=device,weights_only=True)
       params = checkpoint['params']
       model = Upscaling(*params)
       model.load_state_dict(checkpoint['state_dict'])

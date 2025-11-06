@@ -30,4 +30,4 @@ def test():
       axs[1].imshow((target_image + 1) / 2, cmap="gray")
       plt.show()
 
-test()
+# test()
