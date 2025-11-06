@@ -10,11 +10,11 @@ import torch
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-def train(epochs=1000, lr=0.0001, save_every=200, loss_every=50, batch_size=32):
+def train(epochs=300, lr=0.0001, save_every=2, loss_every=2, batch_size=32):
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   print(f"Device: {device}")
 
-  dataset = UpscaleDataset(samples=10)
+  dataset = UpscaleDataset(samples=90000)
   model, epoch = Upscaling.load("model.pt")
   model = model.to(device)
   loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -24,8 +24,8 @@ def train(epochs=1000, lr=0.0001, save_every=200, loss_every=50, batch_size=32):
   n_losses = 0
   batch = 0
   for i in range(epoch, epochs):
-    print(f"Epoch {i+1}")
-    for batch_input, batch_target in loader:
+    print(f"Epoch {i + 1}")
+    for batch_input, batch_target in tqdm.tqdm(loader):
       batch_input = batch_input.to(device)
       batch_target = batch_target.to(device)
       adam.zero_grad()
@@ -38,19 +38,39 @@ def train(epochs=1000, lr=0.0001, save_every=200, loss_every=50, batch_size=32):
 
       batch += 1
 
-      if batch % loss_every == 0:
-        print(f"Loss: {total_loss / n_losses}")
-        total_loss = 0
-        n_losses = 0
-        # figs, axs = plt.subplots(1,2)
-        # axs[0].axis("off")
-        # axs[1].axis("off")
-        # axs[0].imshow(output[0].cpu().detach().permute(1, 2, 0))
-        # axs[1].imshow(batch_target[0].cpu().detach().permute(1, 2, 0))
-        # plt.show()
+    if (i+1) % loss_every == 0:
+      print(f"Loss: {total_loss / n_losses}")
+      total_loss = 0
+      n_losses = 0
+      # figs, axs = plt.subplots(1,2)
+      # axs[0].axis("off")
+      # axs[1].axis("off")
+      # axs[0].imshow(output[0].cpu().detach().permute(1, 2, 0))
+      # axs[1].imshow(batch_target[0].cpu().detach().permute(1, 2, 0))
+      # plt.show()
 
-      if batch % save_every == 0:
-        print(f"Saving model at epoch {i+1} on batch {batch}/{len(loader)}")
-        Upscaling.save(model, "model.pt", i)
-        
+    if (i+1) % save_every == 0:
+      # print(f"Saving model at epoch {i+1} on batch {batch}/{len(loader)}")
+      print("Model is saving...")
+      Upscaling.save(model, "model.pt", i)
+
+def validate(test_loader= 'Datasets/Cartoon/Test', samples = 5000):
+    dataset = UpscaleDataset(samples=samples, filepath = test_loader)
+    model, epoch = Upscaling.load("model.pt")
+    loader = DataLoader(dataset, batch_size=32, shuffle=True)
+    for batch_input, batch_target in loader:
+        torch.no_grad()
+        output = model(batch_input)
+        figs, axs = plt.subplots(1, 2)
+        axs[0].axis("off")
+        axs[1].axis("off")
+        axs[0].imshow(output[0].cpu().detach().permute(1, 2, 0), cmap="gray")
+        axs[1].imshow(batch_target[0].cpu().detach().permute(1, 2, 0), cmap="gray")
+        plt.show()
+
+        # Just testing to look at one image
+        exit(2)
+
+
 train()
+validate()
