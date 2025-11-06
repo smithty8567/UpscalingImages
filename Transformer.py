@@ -65,13 +65,7 @@ class TransformerEncoderLayer(nn.Module):
         # Dropout for regularization
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, input_embeddings):
-        """
-        Args:
-            input_embeddings (Tensor): shape (batch_size, seq_len, embedding_dim)
-                Values should be 0 for positions to attend to, and -inf (or a large negative number)
-                for masked positions.
-        """
+    def attention(self, input_embeddings):
         batch_size, sequence_length, embedding_dim = input_embeddings.shape
         num_heads = self.num_heads
         head_dim = self.head_dim
@@ -93,12 +87,22 @@ class TransformerEncoderLayer(nn.Module):
         attention_output = attention_output.transpose(1, 2).contiguous().view(batch_size, sequence_length, embedding_dim)
         attention_output = self.output_projection(attention_output)
 
+        return attention_output
+
+    def forward(self, input_embeddings):
+        """
+        Args:
+            input_embeddings (Tensor): shape (batch_size, seq_len, embedding_dim)
+                Values should be 0 for positions to attend to, and -inf (or a large negative number)
+                for masked positions.
+        """
+        # Apply attention
+        attention_output = self.attention(input_embeddings)
+
         # Add & Norm (with dropout)
         x = self.layer_norm_1(input_embeddings + self.dropout(attention_output))
 
-        # ---------------------------
         # Feedforward Network
-        # ---------------------------
         feedforward_output = self.feedforward_network(x)
         x = self.layer_norm_2(x + self.dropout(feedforward_output))
 
@@ -124,6 +128,7 @@ class TransformerEncoder(nn.Module):
             for _ in range(num_layers)
         ])
         self.dropout = nn.Dropout(dropout)
+        self.pos_enc_weight = nn.Parameter(torch.tensor(1.0))
 
     def forward(self, embeddings):
         """
@@ -134,7 +139,7 @@ class TransformerEncoder(nn.Module):
 
         # Add positional encoding
         positional_encodings = positional_encoding(sequence_length, embeddings.size(-1)).to(embeddings.device)
-        embeddings = embeddings + positional_encodings.unsqueeze(0)  # Broadcast to batch
+        embeddings = embeddings + positional_encodings.unsqueeze(0) * self.pos_enc_weight  # Broadcast to batch
 
         x = self.dropout(embeddings)
 
