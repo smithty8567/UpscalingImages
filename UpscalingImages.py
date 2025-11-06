@@ -12,40 +12,35 @@ import Data as data
 # Transformer-based Upscaling Model
 # ===============================
 class Upscaling(nn.Module):
-  def __init__(self, embedding_dim=2048, feedforward_dim=2048 * 4, num_layers=2, num_heads=4, patch_size=8):
+  def __init__(self, embedding_dim=2048, num_layers=4, num_heads=4, patch_size=8, channel_size = 8):
     super().__init__()
 
-    self.params = [embedding_dim, feedforward_dim, num_layers, num_heads, patch_size]
+    channels = [channel_size, channel_size * 2, channel_size * 4]
+    self.params = [embedding_dim, num_layers, num_heads, patch_size,channel_size]
     self.patch_size = patch_size
     self.initialConv = nn.Sequential(
-        nn.Conv2d(in_channels=1, out_channels=8, kernel_size=3, padding=1),
-        nn.BatchNorm2d(num_features=8),
+        nn.Conv2d(in_channels=1, out_channels=channels[0], kernel_size=3, padding=1),
+        nn.BatchNorm2d(num_features=channels[0]),
         nn.ReLU(inplace=True),
-        nn.Conv2d(in_channels=8, out_channels=16, kernel_size=3, padding=1),
-        nn.BatchNorm2d(num_features=16),
+        nn.Conv2d(in_channels=channels[0], out_channels=channels[1], kernel_size=3, padding=1),
+        nn.BatchNorm2d(num_features=channels[1]),
         nn.ReLU(inplace=True),
-        nn.Conv2d(in_channels=16, out_channels=24, kernel_size=3, padding=1),
-        nn.BatchNorm2d(num_features=24),
-        nn.ReLU(inplace=True),
-        nn.Conv2d(in_channels=24, out_channels=32, kernel_size=3, padding=1),
-        nn.BatchNorm2d(num_features=32),
-        nn.ReLU(inplace=True),
+        nn.Conv2d(in_channels=channels[1], out_channels=channels[2], kernel_size=3, padding=1),
+        nn.BatchNorm2d(num_features=channels[2]),
+        nn.ReLU(inplace=True)
     )
 
     self.transformer1 = ST.TransformerEncoder(
       embedding_dim=embedding_dim,
-      feedforward_dim=feedforward_dim,
+      feedforward_dim=embedding_dim*4,
       num_layers=num_layers,
       num_heads=num_heads
     )
     self.finalConvLayer = nn.Sequential(
-      nn.Conv2d(in_channels=32, out_channels=24,kernel_size=3, padding=1),
-      nn.BatchNorm2d(num_features=24),
+      nn.Conv2d(in_channels=channels[2], out_channels=channels[1], kernel_size=3, padding=1),
+      nn.BatchNorm2d(num_features=channels[1]),
       nn.ReLU(inplace=True),
-      nn.Conv2d(in_channels=24, out_channels=16, kernel_size=3, padding=1),
-      nn.BatchNorm2d(num_features=16),
-      nn.ReLU(inplace=True),
-      nn.Conv2d(in_channels=16, out_channels=1, kernel_size=3, padding=1),
+      nn.Conv2d(in_channels=channels[1], out_channels=1, kernel_size=3, padding=1),
       nn.ConvTranspose2d(1,1,kernel_size=3,stride=2, padding=1, output_padding=1),
       nn.BatchNorm2d(num_features=1),
       nn.ReLU(inplace=True),
