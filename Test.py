@@ -3,7 +3,6 @@ from UpscalingImages import Upscaling
 from Data import UpscaleDataset
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
-import tqdm
 import torch
 import cv2
 import numpy as np
@@ -64,7 +63,7 @@ def test():
       for i in range(4):
         axs[i].set_xticks([])
         axs[i].set_yticks([])
-      plt.subplots_adjust(wspace=0, hspace=0)
+      plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05, hspace=0, wspace=0)
       plt.show()
 
 test()
