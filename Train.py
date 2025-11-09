@@ -16,7 +16,7 @@ def train(epochs=300, lr=0.0001, save_every=1, loss_every=1, batch_size=32):
   print(f"Device: {device}")
 
   dataset = UpscaleDataset(samples=90000)
-  model, epoch = Upscaling.load("model2.pt")
+  model, epoch = Upscaling.load("model3.pt")
   model = model.to(device)
   loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
   loss = nn.MSELoss()
@@ -47,11 +47,11 @@ def train(epochs=300, lr=0.0001, save_every=1, loss_every=1, batch_size=32):
     if (i+1) % save_every == 0:
       # print(f"Saving model at epoch {i+1} on batch {batch}/{len(loader)}")
       print("Model is saving...")
-      Upscaling.save(model, "model2.pt", i)
+      Upscaling.save(model, "model3.pt", i)
 
-def validate(test_loader= 'Datasets/Cartoon/Train', samples = 90000):
+def validate(test_loader= 'Datasets/Cartoon/Test', samples = 10000):
     dataset = UpscaleDataset(samples=samples, filepath = test_loader)
-    model, epoch = Upscaling.load("model2.pt")
+    model, epoch = Upscaling.load("model3.pt")
     # cnn_model, epoch2 = CNNModel.load("cnn_model.pt")
     loader = DataLoader(dataset, batch_size=32, shuffle=True)
     for batch_input, batch_target in loader:
@@ -73,5 +73,5 @@ def validate(test_loader= 'Datasets/Cartoon/Train', samples = 90000):
             plt.show()
 
 
-# train()
-validate()
+train()
+# validate()
