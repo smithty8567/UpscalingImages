@@ -1,53 +1,60 @@
-import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
 from UpscalingImages import Upscaling
-from CNN import CNNModel
 from Data import UpscaleDataset
 from torch.utils.data import DataLoader
 from torch import optim, nn
 import matplotlib.pyplot as plt
-import tqdm
+from tqdm import tqdm
 import torch
 
+# Used strictly for development to see the images
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-def train(epochs=300, lr=0.0001, save_every=1, loss_every=1, batch_size=32):
-  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-  print(f"Device: {device}")
 
-  dataset = UpscaleDataset(samples=90000)
-  model, epoch = Upscaling.load("model3.pt")
-  model = model.to(device)
-  loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-  loss = nn.MSELoss()
-  adam = optim.Adam(model.parameters(), lr=lr)
-  total_loss = 0
-  n_losses = 0
-  batch = 0
-  for i in range(epoch, epochs):
-    print(f"Epoch {i + 1}")
-    for batch_input, batch_target in tqdm.tqdm(loader):
-      batch_input = batch_input.to(device)
-      batch_target = batch_target.to(device)
-      adam.zero_grad()
-      output = model(batch_input)
-      loss_val = loss(output, batch_target)
-      total_loss += loss_val.item()
-      n_losses += 1
-      loss_val.backward()
-      adam.step()
+def train(epochs=300, lr=0.0001, save_every=10, batch_size=32):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device}")
 
-      batch += 1
+    # Loads model from filepath or creates new model
+    model, epoch = Upscaling.load("model.pt")
+    model = model.to(device)
 
-    if (i+1) % loss_every == 0:
-      print(f"Loss: {total_loss / n_losses}")
-      total_loss = 0
-      n_losses = 0
+    # Create Dataset and send into dataloader
+    dataset = UpscaleDataset(samples=64)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    if (i+1) % save_every == 0:
-      # print(f"Saving model at epoch {i+1} on batch {batch}/{len(loader)}")
-      print("Model is saving...")
-      Upscaling.save(model, "model3.pt", i)
+    # Initiate Loss and Optimizer functions
+    loss_fn = nn.MSELoss()
+    adam = optim.Adam(model.parameters(), lr=lr)
+
+    # Loop through epochs, starting at 0 or where model left off
+    for i in range(epoch, epochs):
+        progress_bar = tqdm(loader, desc=f"Epoch {i}/{epochs}")
+        running_loss = 0.0
+
+        for j, (batch_input, batch_target) in enumerate(progress_bar):
+            batch_input = batch_input.to(device)
+            batch_target = batch_target.to(device)
+
+            # Find values
+            adam.zero_grad()
+            output = model(batch_input)
+
+            # Compute Loss
+            loss = loss_fn(output, batch_target)
+            running_loss += loss.item()
+
+            # Update weights
+            loss.backward()
+            adam.step()
+
+            # Display Loss
+            progress_bar.set_postfix({"Loss:": loss.item()})
+
+        # Save model every __ epochs
+        if i % save_every == 0:
+            print(f"Saving model at epoch {i}")
+            Upscaling.save(model, "model.pt", i)
 
 def validate(test_loader= 'Datasets/Cartoon/Test', samples = 10000):
     dataset = UpscaleDataset(samples=samples, filepath = test_loader)
