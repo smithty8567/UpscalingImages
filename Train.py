@@ -1,3 +1,5 @@
+import math
+
 from UpscalingImages import Upscaling
 from Data import UpscaleDataset
 from torch.utils.data import DataLoader
@@ -20,7 +22,7 @@ def train(epochs=300, lr=0.0001, save_every=10, batch_size=32):
     model = model.to(device)
 
     # Create Dataset and send into dataloader
-    dataset = UpscaleDataset(samples=64, color = True)
+    dataset = UpscaleDataset(color = True)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # Initiate Loss and Optimizer functions
@@ -48,8 +50,9 @@ def train(epochs=300, lr=0.0001, save_every=10, batch_size=32):
             loss.backward()
             adam.step()
 
-            # Display Loss
-            progress_bar.set_postfix({"Loss:": loss.item()})
+            # Display Loss and PSNR
+            PSNR = 10 * math.log10(1 / loss.item())
+            progress_bar.set_postfix({"Loss:": loss.item(), "PSNR:": PSNR})
 
         # Save model every __ epochs
         if i % save_every == 0:

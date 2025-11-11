@@ -109,7 +109,7 @@ class UpscaleDataset(Dataset):
         self.in_size = in_size
         self.out_size = out_size
         self.color = color
-        self.compress = 100
+        self.compress = 30
 
     def set_compression(self, compression):
         self.compress = compression
@@ -140,6 +140,7 @@ class UpscaleDataset(Dataset):
 #     plt.imshow(images[0].permute(1, 2, 0), cmap='gray')
 #     plt.show()
 
+# -----TEST CODE FOR COMPRESSION-----
 # data = UpscaleDataset(color = True, samples = 100)
 # load = DataLoader(data, batch_size=4, shuffle=True)
 #
