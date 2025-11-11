@@ -18,7 +18,7 @@ class Upscaling(nn.Module):
     # Embedding dimension is patch_size * patch_size * num_channels
     # num_channels = channel_size * 4
 
-    init_channels = 1 # Gray scale
+    init_channels = 3 # Color
     channels = [multiply_channel, multiply_channel * 2, multiply_channel * 4, multiply_channel * 8]
     self.params = [num_layers, num_heads, patch_size,multiply_channel]
     self.patch_size = patch_size
@@ -82,45 +82,45 @@ class Upscaling(nn.Module):
     )
 
     self.finalConvLayer = nn.Sequential(
-      nn.Conv2d(in_channels=channels[0], out_channels=1, kernel_size=3, padding=1),
+      nn.Conv2d(in_channels=channels[0], out_channels=3, kernel_size=3, padding=1),
       nn.ReLU(inplace=True)
     )
 
   def forward(self, x):
 
     # Adding more channels to the image
-    x = self.initialConv(x) # (32, 1, 64, 64) --> (32, 32, 16, 16)
+    x = self.initialConv(x) # (32, 3, 64, 64) --> (32, 32, 64, 64)
     # print("After CONV", x.shape)
 
-    x = data.to_patches(x, self.patch_size) # (32, 32, 16, 16) --> (32, 4, 2048)
+    x = data.to_patches(x, self.patch_size) # (32, 32, 64, 64) --> (32, 64, 2048)
     # print("After PATCHES", x.shape)
-    x = self.transformer1(x) # (32, 4, 2048)
+    x = self.transformer1(x) # (32, 64, 2048)
     # print("Shape after transformer:", x.shape)
-    x = data.to_image(x, self.patch_size) # (32, 4, 2048) --> (32, 32, 16, 16)
+    x = data.to_image(x, self.patch_size) # (32, 64, 2048) --> (32, 32, 64, 64)
     # print("Back into image:", x.shape)
     res = self.residualConv(x)
     x = x + res
-    x = self.convLayer2(x) # (32, 32, 16, 16) --> (32, 16, 64, 64)
+    x = self.convLayer2(x) # (32, 32, 64, 64) --> (32, 16, 128, 128)
     # print("After 2nd conv:", x.shape)
 
 
-    x = data.to_patches(x, self.patch_size) # (32, 16, 64, 64) --> (32, 64, 1024)
+    x = data.to_patches(x, self.patch_size) # (32, 16, 128, 128) --> (32, 256, 1024)
     # print("After patches again:", x.shape)
-    x = self.transformer2(x) # (32, 64, 1024)
+    x = self.transformer2(x) # (32, 256, 1024)
     # print("After 2nd transformer:", x.shape)
-    x = data.to_image(x, self.patch_size) # (32, 64, 1024) --> (32, 16, 64, 64)
+    x = data.to_image(x, self.patch_size) # (32, 256, 1024) --> (32, 16, 128, 128)
     # print("Image again:", x.shape)
 
     x = self.convLayer3(x)
 
-    x = data.to_patches(x, self.patch_size)  # (32, 16, 64, 64) --> (32, 64, 1024)
+    x = data.to_patches(x, self.patch_size)  # (32, 16, 128, 128) --> (32, 1024, 512)
     # print("After patches again:", x.shape)
-    x = self.transformer3(x)  # (32, 64, 1024)
+    x = self.transformer3(x)  # (32, 1024, 512)
     # print("After 3rd transformer:", x.shape)
-    x = data.to_image(x, self.patch_size)  # (32, 64, 1024) --> (32, 16, 64, 64)
+    x = data.to_image(x, self.patch_size)  # (32, 1024, 512) --> (32, 8, 256, 256)
     # print("Image again:", x.shape)
 
-    x = self.finalConvLayer(x) # (32, 16, 64, 64) --> (32, 1, 256, 256)
+    x = self.finalConvLayer(x) # (32, 8, 256, 256) --> (32, 3, 256, 256)
     # print("final image shape:", x.shape)
 
     return x

@@ -33,38 +33,44 @@ def to_image(patched_batch, patch_size):
     image_batch = image_batch.contiguous().view(batch, color, height, width)
     return image_batch
 
-def process_image(path, process_size, out_size, color):
+def process_image(path, process_size, out_size, compress, color):
     interpolation = random.choice([cv2.INTER_NEAREST, cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA])
     if color:
-        # Reads image, normalizes, coverts to RGB
-        image = cv2.imread(path)[100:400, 100:400, ::-1]
-        image = image / 255
+        # Loads image
+        image = cv2.imread(path)[100:400, 100:400]
 
-        # Resizes image and permutes image to (Color, Height, Width)
-        processed_image = torch.tensor(cv2.resize(image, (process_size, process_size),
-                                       interpolation = interpolation), dtype=torch.float32)
+        resized = cv2.resize(image, (process_size, process_size), interpolation=interpolation)
+        Y, Cr, Cb = cv2.split(cv2.cvtColor(resized, cv2.COLOR_BGR2YCR_CB))
+
+        _, encode = cv2.imencode('.jpg', Y, [cv2.IMWRITE_JPEG_QUALITY, compress])
+        y_decode = cv2.imdecode(encode, -1)
+        merge = cv2.merge([y_decode, Cr, Cb])
+        processed = cv2.cvtColor(merge, cv2.COLOR_YCR_CB2RGB) / 255.
+
+        # Resizes image and permutes image to (Color, Height, Width) dtype = float32
+        processed_image = torch.from_numpy(processed).float()
         processed_image = processed_image.permute(2, 0, 1)
         processed_image = processed_image.contiguous()
 
-        # Convert image to tensor and permute image to (Color, Height, Width)
-        image = torch.tensor(cv2.resize(image, (out_size, out_size),
-                                       interpolation = interpolation), dtype=torch.float32)
+        # Convert image to tensor and permute image to (Color, Height, Width) dtype = float32
+        image = cv2.resize(image[:,:,::-1] / 255., (out_size, out_size), interpolation=interpolation)
+        image = torch.from_numpy(image).float()
         image = image.permute(2, 0, 1)
         image = image.contiguous()
 
     else:
         # Reads image, normalizes, converts to grayscale
-        image = (cv2.imread(path, cv2.IMREAD_GRAYSCALE)[100:400, 100:400])
+        image = cv2.imread(path, cv2.IMREAD_GRAYSCALE)[100:400, 100:400]
         image = image / 255
 
         # Resizes image and converts to tensor
-        processed_image =  torch.tensor(cv2.resize(image, (process_size, process_size),
-                                       interpolation = interpolation), dtype=torch.float32)
+        processed_image =  torch.from_numpy(cv2.resize(image, (process_size, process_size),
+                                       interpolation = interpolation)).float()
 
         # Converts original image to tensor, reshapes both images to (1, Height, Width)
         processed_image = processed_image.unsqueeze(0)
-        image = torch.tensor(cv2.resize(image, (out_size, out_size),
-                                       interpolation = interpolation), dtype=torch.float32).unsqueeze(0)
+        image = torch.from_numpy(cv2.resize(image, (out_size, out_size),
+                                       interpolation = interpolation)).float().unsqueeze(0)
     return processed_image, image
 
 
@@ -97,18 +103,24 @@ class UpscaleDataset(Dataset):
             __getitem__ (int): processed image and original image from index.
         """
 
-    def __init__(self, filepath = 'Datasets/Cartoon/Train', in_size = 64, out_size = 256, color = False, samples=90000):
+    def __init__(self, filepath = 'Datasets/Cartoon/Train', in_size = 64, out_size = 256,
+                 color = False, samples=90000):
         self.directories = generate_directory_list(filepath, samples)
         self.in_size = in_size
         self.out_size = out_size
         self.color = color
+        self.compress = 100
+
+    def set_compression(self, compression):
+        self.compress = compression
 
     def __len__(self):
         return len(self.directories)
 
     def __getitem__(self, idx):
         image = self.directories[idx]
-        return process_image(image, self.in_size, self.out_size, self.color)
+        return process_image(image, self.in_size, self.out_size, self.compress, self.color)
+
 
 # data = UpscaleDataset(color = False, samples = 100)
 # load = DataLoader(data, batch_size=4, shuffle=True)
@@ -140,8 +152,7 @@ class UpscaleDataset(Dataset):
 #     images = to_image(patched, 8)
 #     print(f'Image Shape: {images.shape} \n')
 #
-#     plt.imshow(images[0].permute(1, 2, 0))
-#     plt.show()
-#
-#     plt.imshow(out[0].permute(1, 2, 0))
+#     fig, ax = plt.subplots(1, 2)
+#     ax[0].imshow(images[0].permute(1, 2, 0))
+#     ax[1].imshow(out[0].permute(1, 2, 0))
 #     plt.show()

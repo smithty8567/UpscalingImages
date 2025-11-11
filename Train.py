@@ -20,7 +20,7 @@ def train(epochs=300, lr=0.0001, save_every=10, batch_size=32):
     model = model.to(device)
 
     # Create Dataset and send into dataloader
-    dataset = UpscaleDataset(samples=64)
+    dataset = UpscaleDataset(samples=64, color = True)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # Initiate Loss and Optimizer functions
