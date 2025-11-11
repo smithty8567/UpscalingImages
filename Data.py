@@ -2,10 +2,10 @@ import os
 import torch
 import tqdm as tqdm
 import random
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset #, DataLoader
 import cv2
-import numpy as np
-import matplotlib.pyplot as plt
+# import numpy as np
+# import matplotlib.pyplot as plt
 
 def to_patches(image_batch, patch_size):
     # Image Batch Shape: (Batch, Color Channels, Height, Width)
@@ -109,7 +109,10 @@ class UpscaleDataset(Dataset):
         self.in_size = in_size
         self.out_size = out_size
         self.color = color
-        self.compress = 30
+        self.compress = 100
+
+    def get_compression(self):
+        return self.compress
 
     def set_compression(self, compression):
         self.compress = compression

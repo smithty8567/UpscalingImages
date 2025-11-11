@@ -59,26 +59,36 @@ def train(epochs=300, lr=0.0001, save_every=10, batch_size=32):
             print(f"Saving model at epoch {i}")
             Upscaling.save(model, "model.pt", i)
 
-def validate(test_loader= 'Datasets/Cartoon/Test', samples = 10000):
-    dataset = UpscaleDataset(samples=samples, filepath = test_loader)
-    model, epoch = Upscaling.load("model3.pt")
+        if 0.01 > (running_loss / len(loader)):
+            compression = max(50, dataset.get_compression() - 10)
+            if compression > 50: print(f'Lowering Compression: {compression}')
+            dataset.set_compression(compression)
+
+
+def validate(test_loader= 'Datasets/Cartoon/Test', samples = 10000, compress = 50):
+    dataset = UpscaleDataset(samples=samples, color = True, filepath = test_loader)
+    dataset.set_compression(compress)
+    model, epoch = Upscaling.load("lossy_model.pt")
     # cnn_model, epoch2 = CNNModel.load("cnn_model.pt")
-    loader = DataLoader(dataset, batch_size=32, shuffle=True)
+    loader = DataLoader(dataset, batch_size=1, shuffle=True)
     for batch_input, batch_target in loader:
         with torch.no_grad():
             output = model(batch_input)
             # output2 = cnn_model(batch_input)
-            figs, axs = plt.subplots(1, 2)
+            figs, axs = plt.subplots(1, 3)
             axs[0].axis("off")
             axs[1].axis("off")
+            axs[2].axis("off")
             # axs[2].axis("off")
 
             axs[0].set_title("Transformer")
             axs[1].set_title("Original")
+            axs[2].set_title("Input")
             # axs[2].set_title("CNN")
 
-            axs[0].imshow(output[0].cpu().detach().squeeze(), cmap="gray")
-            axs[1].imshow(batch_target[0].cpu().detach().squeeze(), cmap="gray")
+            axs[0].imshow(output[0].detach().permute(1, 2, 0))
+            axs[1].imshow(batch_target[0].detach().permute(1, 2, 0))
+            axs[2].imshow(batch_input[0].detach().permute(1, 2, 0))
             # axs[2].imshow(output2[0].cpu().detach().squeeze(), cmap="gray")
             plt.show()
 
