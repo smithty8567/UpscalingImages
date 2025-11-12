@@ -122,6 +122,7 @@ class Upscaling(nn.Module):
 
     x = self.finalConvLayer(x) # (32, 8, 256, 256) --> (32, 3, 256, 256)
     # print("final image shape:", x.shape)
+    x = torch.sigmoid(x) # Renormalizes values between 0 and 1
 
     return x
 

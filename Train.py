@@ -65,33 +65,33 @@ def train(epochs=300, lr=0.0001, save_every=10, batch_size=32):
             dataset.set_compression(compression)
 
 
-def validate(test_loader= 'Datasets/Cartoon/Test', samples = 10000, compress = 50):
+def validate(test_loader= 'Datasets/Cartoon/Other', samples = 10000, compress = 100):
     dataset = UpscaleDataset(samples=samples, color = True, filepath = test_loader)
     dataset.set_compression(compress)
-    model, epoch = Upscaling.load("lossy_model.pt")
-    # cnn_model, epoch2 = CNNModel.load("cnn_model.pt")
+    current, epoch = Upscaling.load("curriculum_model.pt")
+    lossy, epoch = Upscaling.load("lossy_model.pt")
+
     loader = DataLoader(dataset, batch_size=1, shuffle=True)
     for batch_input, batch_target in loader:
         with torch.no_grad():
-            output = model(batch_input)
-            # output2 = cnn_model(batch_input)
-            figs, axs = plt.subplots(1, 3)
-            axs[0].axis("off")
-            axs[1].axis("off")
-            axs[2].axis("off")
-            # axs[2].axis("off")
+            curriculum_output = current(batch_input)
+            lossy_output= lossy(batch_input)
+            figs, axs = plt.subplots(2, 3)
+            for i in range(2):
+                axs[i][0].set_title("Transformer")
+                axs[i][1].set_title("Original")
+                axs[i][2].set_title("Input")
 
-            axs[0].set_title("Transformer")
-            axs[1].set_title("Original")
-            axs[2].set_title("Input")
-            # axs[2].set_title("CNN")
+                axs[i][1].imshow(batch_target[0].detach().permute(1, 2, 0))
+                axs[i][2].imshow(batch_input[0].detach().permute(1, 2, 0))
+                for j in range(3):
+                    axs[i][j].axis("off")
 
-            axs[0].imshow(output[0].detach().permute(1, 2, 0))
-            axs[1].imshow(batch_target[0].detach().permute(1, 2, 0))
-            axs[2].imshow(batch_input[0].detach().permute(1, 2, 0))
-            # axs[2].imshow(output2[0].cpu().detach().squeeze(), cmap="gray")
+            axs[0][0].imshow(curriculum_output[0].detach().permute(1, 2, 0))
+            axs[1][0].imshow(lossy_output[0].detach().permute(1, 2, 0))
+
             plt.show()
 
 
-train()
-# validate()
+# train()
+validate()
