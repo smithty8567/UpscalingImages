@@ -8,18 +8,25 @@ import os
 import Transformer as ST
 import Data as data
 
+
 # ===============================
 # Transformer-based Upscaling Model
 # ===============================
 class Upscaling(nn.Module):
-  def __init__(self, embedding_dim=2048, feedforward_dim=2048 * 4, num_layers=4, num_heads=4, patch_size=8):
+  def __init__(self, embedding_dim=2048, feedforward_dim=2048 * 4, num_layers=1, num_heads=4, patch_size=8):
     super().__init__()
 
     self.params = [embedding_dim, feedforward_dim, num_layers, num_heads, patch_size]
     self.patch_size = patch_size
 
     self.initialConv = nn.Sequential(
-      nn.Conv2d(in_channels=1, out_channels=32, kernel_size=1)
+      nn.Conv2d(1, 64, 5, 1, 2),
+      nn.ReLU(inplace=True),
+      nn.Conv2d(64, 32, 3, 1, 1),
+      nn.BatchNorm2d(num_features=32),
+      nn.ReLU(inplace=True),
+      nn.Conv2d(32, 32, 3, 1, 1),
+      nn.ReLU(inplace=True),
     )
 
     self.transformer1 = ST.TransformerEncoder(
@@ -28,23 +35,20 @@ class Upscaling(nn.Module):
       num_layers=num_layers,
       num_heads=num_heads
     )
+
     self.finalConvLayer = nn.Sequential(
-      nn.Conv2d(in_channels=32, out_channels=1, kernel_size=1),
-      nn.ConvTranspose2d(in_channels=1, out_channels=1, kernel_size=2, stride=2)
+      nn.Conv2d(32, 4, 1, 1, 0),
+      nn.PixelShuffle(2),
+      nn.BatchNorm2d(num_features=1),
+      nn.ReLU(inplace=True)
     )
 
   def forward(self, x):
-
-    # Adding more channels to the image
-    # print("BEFORE CONV", x.shape)
     x = self.initialConv(x)
-
-    # shape the image into patches
-    # print("BEFORE PATCHES", x.shape)
     x = data.to_patches(x, self.patch_size)
-    # print("Shape before transformer:", x.shape)
+    
     x = self.transformer1(x)
-    # print("Shape after transformer:", x.shape)
+    
     x = data.to_image(x, self.patch_size)
     x = self.finalConvLayer(x)
     return x
@@ -75,4 +79,4 @@ class Upscaling(nn.Module):
       print("Creating new model...")
       return Upscaling(), 0
 
-# torchinfo.summary(Upscaling(), input_size=(16,1,64,64))
+# torchinfo.summary(Upscaling(), input_size=(32,1,64,64))
