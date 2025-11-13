@@ -12,7 +12,7 @@ import Data as data
 # Transformer-based Upscaling Model
 # ===============================
 class Upscaling(nn.Module):
-  def __init__(self, num_layers=4, num_heads=2, patch_size=8, multiply_channel = 8):
+  def __init__(self, num_layers=4, num_heads=2, patch_size=8, multiply_channel = 16):
     super().__init__()
 
     # Embedding dimension is patch_size * patch_size * num_channels

@@ -13,7 +13,7 @@ import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
-def train(epochs=300, lr=0.0001, save_every=10, batch_size=32):
+def train(epochs=10000, lr=0.0001, save_every=1, batch_size=32):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
@@ -65,10 +65,10 @@ def train(epochs=300, lr=0.0001, save_every=10, batch_size=32):
             dataset.set_compression(compression)
 
 
-def validate(test_loader= 'Datasets/Cartoon/Other', samples = 10000, compress = 100):
+def validate(test_loader= 'Datasets/Cartoon/Test', samples = 10000, compress = 100):
     dataset = UpscaleDataset(samples=samples, color = True, filepath = test_loader)
     dataset.set_compression(compress)
-    current, epoch = Upscaling.load("Models/compress_model.pt")
+    current, epoch = Upscaling.load("Models/curriculum_model.pt")
     lossy, epoch = Upscaling.load("Models/lossy_model.pt")
 
     loader = DataLoader(dataset, batch_size=1, shuffle=True)
