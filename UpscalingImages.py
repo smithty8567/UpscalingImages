@@ -4,6 +4,7 @@ import torchinfo
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import os
+import torch.nn.functional as F
 
 import Transformer as ST
 import Data as data
@@ -12,13 +13,13 @@ import Data as data
 # Transformer-based Upscaling Model
 # ===============================
 class Upscaling(nn.Module):
-  def __init__(self, num_layers=4, num_heads=2, patch_size=8, multiply_channel = 16):
+  def __init__(self, num_layers=4, num_heads=2, patch_size=8, multiply_channel = 8):
     super().__init__()
 
     # Embedding dimension is patch_size * patch_size * num_channels
     # num_channels = channel_size * 4
 
-    init_channels = 3 # Color
+    init_channels = 1 # Color
     channels = [multiply_channel, multiply_channel * 2, multiply_channel * 4, multiply_channel * 8]
     self.params = [num_layers, num_heads, patch_size,multiply_channel]
     self.patch_size = patch_size
@@ -82,7 +83,7 @@ class Upscaling(nn.Module):
     )
 
     self.finalConvLayer = nn.Sequential(
-      nn.Conv2d(in_channels=channels[0], out_channels=3, kernel_size=3, padding=1),
+      nn.Conv2d(in_channels=channels[0], out_channels=init_channels, kernel_size=3, padding=1),
       nn.ReLU(inplace=True)
     )
 
@@ -100,6 +101,8 @@ class Upscaling(nn.Module):
     # print("Back into image:", x.shape)
     res = self.residualConv(x)
     x = x + res
+
+    # Upscaling
     x = self.convLayer2(x) # (32, 32, 64, 64) --> (32, 16, 128, 128)
     # print("After 2nd conv:", x.shape)
 
@@ -111,6 +114,7 @@ class Upscaling(nn.Module):
     x = data.to_image(x, self.patch_size) # (32, 256, 1024) --> (32, 16, 128, 128)
     # print("Image again:", x.shape)
 
+    # Upscaling
     x = self.convLayer3(x)
 
     x = data.to_patches(x, self.patch_size)  # (32, 16, 128, 128) --> (32, 1024, 512)
@@ -122,7 +126,8 @@ class Upscaling(nn.Module):
 
     x = self.finalConvLayer(x) # (32, 8, 256, 256) --> (32, 3, 256, 256)
     # print("final image shape:", x.shape)
-    x = torch.sigmoid(x) # Renormalizes values between 0 and 1
+    # x = torch.sigmoid(x) # Renormalizes values between 0 and 1
+    # x = F.tanh(x)
 
     return x
 
