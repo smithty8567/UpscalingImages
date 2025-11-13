@@ -1,4 +1,4 @@
 /Datasets/Cartoon/
+/Datasets/Manga/
 __pycache__/
-cnn_model.pt
-model.pt
+Models/
