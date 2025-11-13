@@ -18,7 +18,7 @@ def train(epochs=300, lr=0.0001, save_every=10, batch_size=32):
     print(f"Device: {device}")
 
     # Loads model from filepath or creates new model
-    model, epoch = Upscaling.load("model.pt")
+    model, epoch = Upscaling.load("Models/compress_model.pt")
     model = model.to(device)
 
     # Create Dataset and send into dataloader
@@ -57,7 +57,7 @@ def train(epochs=300, lr=0.0001, save_every=10, batch_size=32):
         # Save model every __ epochs
         if i % save_every == 0:
             print(f"Saving model at epoch {i}")
-            Upscaling.save(model, "model.pt", i)
+            Upscaling.save(model, "Models/compress_model.pt", i)
 
         if 0.01 > (running_loss / len(loader)):
             compression = max(50, dataset.get_compression() - 10)
@@ -68,8 +68,8 @@ def train(epochs=300, lr=0.0001, save_every=10, batch_size=32):
 def validate(test_loader= 'Datasets/Cartoon/Other', samples = 10000, compress = 100):
     dataset = UpscaleDataset(samples=samples, color = True, filepath = test_loader)
     dataset.set_compression(compress)
-    current, epoch = Upscaling.load("curriculum_model.pt")
-    lossy, epoch = Upscaling.load("lossy_model.pt")
+    current, epoch = Upscaling.load("Models/compress_model.pt")
+    lossy, epoch = Upscaling.load("Models/lossy_model.pt")
 
     loader = DataLoader(dataset, batch_size=1, shuffle=True)
     for batch_input, batch_target in loader:
@@ -91,7 +91,6 @@ def validate(test_loader= 'Datasets/Cartoon/Other', samples = 10000, compress = 
             axs[1][0].imshow(lossy_output[0].detach().permute(1, 2, 0))
 
             plt.show()
-
 
 # train()
 validate()
