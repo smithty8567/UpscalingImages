@@ -45,7 +45,7 @@ def process_image(path, process_size, out_size, compress, color):
         _, encode = cv2.imencode('.jpg', Y, [cv2.IMWRITE_JPEG_QUALITY, compress])
         y_decode = cv2.imdecode(encode, -1)
         merge = cv2.merge([y_decode, Cr, Cb])
-        processed = cv2.cvtColor(merge, cv2.COLOR_YCR_CB2RGB) / 255.
+        processed = cv2.cvtColor(merge, cv2.COLOR_YCR_CB2RGB) / 255
 
         # Resizes image and permutes image to (Color, Height, Width) dtype = float32
         processed_image = torch.from_numpy(processed).float()
@@ -61,16 +61,21 @@ def process_image(path, process_size, out_size, compress, color):
     else:
         # Reads image, normalizes, converts to grayscale
         image = cv2.imread(path, cv2.IMREAD_GRAYSCALE)[100:400, 100:400]
-        image = image / 255
+        
+        resized = cv2.resize(image, (process_size, process_size), interpolation=interpolation)
+        _, encode = cv2.imencode('.jpg', resized, [cv2.IMWRITE_JPEG_QUALITY, compress])
+        y_decode = cv2.imdecode(encode, -1)
+        processed = y_decode / 255
 
         # Resizes image and converts to tensor
-        processed_image =  torch.from_numpy(cv2.resize(image, (process_size, process_size),
-                                       interpolation = interpolation)).float()
+        processed_image = torch.from_numpy(processed).float()
+        processed_image = processed_image.unsqueeze(0)
 
         # Converts original image to tensor, reshapes both images to (1, Height, Width)
-        processed_image = processed_image.unsqueeze(0)
-        image = torch.from_numpy(cv2.resize(image, (out_size, out_size),
-                                       interpolation = interpolation)).float().unsqueeze(0)
+        image = cv2.resize(image, (out_size, out_size), interpolation=interpolation)
+        image = torch.from_numpy(image).float()
+        image = image.unsqueeze(0)
+
     return processed_image, image
 
 

@@ -22,7 +22,7 @@ def train(epochs=10000, lr=0.0001, save_every=1, batch_size=32):
     model = model.to(device)
 
     # Create Dataset and send into dataloader
-    dataset = UpscaleDataset(color = True)
+    dataset = UpscaleDataset(color=False)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # Initiate Loss and Optimizer functions
@@ -48,6 +48,10 @@ def train(epochs=10000, lr=0.0001, save_every=1, batch_size=32):
 
             # Update weights
             loss.backward()
+
+            # Clip gradients
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
+
             adam.step()
 
             # Display Loss and PSNR
@@ -68,8 +72,8 @@ def train(epochs=10000, lr=0.0001, save_every=1, batch_size=32):
 def validate(test_loader= 'Datasets/Cartoon/Test', samples = 10000, compress = 100):
     dataset = UpscaleDataset(samples=samples, color = True, filepath = test_loader)
     dataset.set_compression(compress)
-    current, epoch = Upscaling.load("Models/curriculum_model.pt")
-    lossy, epoch = Upscaling.load("Models/lossy_model.pt")
+    current, epoch = Upscaling.load("Models/compress_model.pt")
+    lossy, epoch = Upscaling.load("Models/compress_model.pt")
 
     loader = DataLoader(dataset, batch_size=1, shuffle=True)
     for batch_input, batch_target in loader:
@@ -92,5 +96,5 @@ def validate(test_loader= 'Datasets/Cartoon/Test', samples = 10000, compress = 1
 
             plt.show()
 
-# train()
-validate()
+train()
+# validate()
