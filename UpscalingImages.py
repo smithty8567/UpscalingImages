@@ -39,7 +39,7 @@ class Upscaling(nn.Module):
     self.finalConvLayer = nn.Sequential(
       nn.Conv2d(32, 4, 1, 1, 0),
       nn.PixelShuffle(2),
-      nn.BatchNorm2d(num_features=1),
+      # nn.BatchNorm2d(num_features=1),
       nn.ReLU(inplace=True)
     )
 
@@ -48,7 +48,8 @@ class Upscaling(nn.Module):
     x = data.to_patches(x, self.patch_size)
     
     x = self.transformer1(x)
-    
+    # print(f"Mean: {x.abs().mean().item():.4f}, Max: {x.abs().max().item():.4f}")
+
     x = data.to_image(x, self.patch_size)
     x = self.finalConvLayer(x)
     return x

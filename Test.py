@@ -32,9 +32,9 @@ def get_model_output(y: torch.Tensor, cbcr: np.ndarray):
 
 def test():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-  dataset = UpscaleDataset('Datasets/Cartoon/Test', color=True)
-  vit_model, _ = Upscaling.load("model.pt")
-  cnn_model, _ = CNNModel.load("cnn_model.pt")
+  dataset = UpscaleDataset('Datasets/Manga/Test', color=False)
+  vit_model, _ = Upscaling.load("Models/manga_model_2.pt")
+  cnn_model, _ = CNNModel.load("Models/cnn_model.pt")
   vit_model = vit_model.to(device)
   cnn_model = cnn_model.to(device)
   loader = DataLoader(dataset, batch_size=100, shuffle=True)
@@ -42,22 +42,25 @@ def test():
 
   with torch.no_grad():
     for i in range(input.shape[0]):
-      y, cbcr = get_model_input(input[i])
+      # y, cbcr = get_model_input(input[i])
+      y = input[i].unsqueeze(0)
       y = y.to(device)
       output_y_vit = vit_model(y)
       output_y_cnn = cnn_model(y)
-      output_image_vit = get_model_output(output_y_vit, cbcr)
-      output_image_cnn = get_model_output(output_y_cnn, cbcr)
+      output_image_vit = output_y_vit.cpu().permute(0, 2, 3, 1)[0].clip(0, 1)
+      output_image_cnn = output_y_cnn.cpu().permute(0, 2, 3, 1)[0].clip(0, 1)
+      # output_image_vit = get_model_output(output_y_vit, cbcr)
+      # output_image_cnn = get_model_output(output_y_cnn, cbcr)
       
       # Showing current model output compared to target image
       target_image = target[i].permute(1, 2, 0).detach().numpy()
       input_image = input[i].permute(1, 2, 0).detach().numpy()
       downscaled_image = cv2.resize(input_image, (input_image.shape[0] * 2, input_image.shape[1] * 2), interpolation=cv2.INTER_NEAREST)
       fig, axs = plt.subplots(1, 4, sharey=True)
-      axs[0].imshow(downscaled_image)
-      axs[1].imshow(target_image)
-      axs[2].imshow(output_image_vit)
-      axs[3].imshow(output_image_cnn)
+      axs[0].imshow(downscaled_image, cmap="gray")
+      axs[1].imshow(target_image, cmap="gray")
+      axs[2].imshow(output_image_vit, cmap="gray")
+      axs[3].imshow(output_image_cnn, cmap="gray")
       axs[0].set_title('Downscaled')
       axs[1].set_title('Original')
       axs[2].set_title('Upscaled (VIT)')

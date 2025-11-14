@@ -50,21 +50,22 @@ class CNNModel(nn.Module):
       print("Creating new model...")
       return CNNModel(), 0
   
-def train(epochs=10000, lr=0.001, save_every=50, batch_size=16):
+def train(epochs=10000, lr=0.001, save_every=2000, batch_size=16):
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   dataset = UpscaleDataset()
-  model, epoch = CNNModel.load("cnn_model.pt")
+  model, epoch = CNNModel.load("Models/cnn_model.pt")
   model = model.to(device)
   loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
   loss = nn.MSELoss()
   adam = optim.Adam(model.parameters(), lr=lr)
   total_loss = 0
   n_losses = 0
+  batch = 0
 
   for i in range(epoch, epochs):
     print(f"Epoch {i+1}")
-    batch = 0
-    for batch_input, batch_target in tqdm.tqdm(loader):
+    prog_bar = tqdm.tqdm(loader)
+    for j, (batch_input, batch_target) in enumerate(prog_bar):
       batch_input = batch_input.to(device)
       batch_target = batch_target.to(device)
       adam.zero_grad()
@@ -77,15 +78,15 @@ def train(epochs=10000, lr=0.001, save_every=50, batch_size=16):
       
       batch += 1
       if batch % save_every == 0:
-        print(f" Saving model at epoch {i+1} on batch {batch}/{len(dataset)/4} with loss {total_loss/n_losses}")
-        CNNModel.save(model, "cnn_model.pt", i)
+        print(f" Saving model at epoch {i+1} on batch {j}/{len(prog_bar)} with loss {total_loss/n_losses}")
+        CNNModel.save(model, "Models/cnn_model.pt", i)
         total_loss = 0
         n_losses = 0
 
 def test():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   dataset = UpscaleDataset()
-  model, epoch = CNNModel.load("cnn_model.pt")
+  model, epoch = CNNModel.load("Models/cnn_model.pt")
   model = model.to(device)
   loader = DataLoader(dataset, batch_size=4, shuffle=True)
   
@@ -96,11 +97,17 @@ def test():
       output = model(batch_input)
       
       # Showing current model output compared to target image
-      target_image = batch_target.cpu().permute(0, 2, 3, 1)[0].detach().numpy()
-      output_image = output.cpu().permute(0, 2, 3, 1)[0].detach().numpy()
-      fig, axs = plt.subplots(1, 2)
-      axs[0].imshow((output_image + 1) / 2, cmap="gray")
-      axs[1].imshow((target_image + 1) / 2, cmap="gray")
+      target_image = batch_target.cpu().permute(0, 2, 3, 1)[0].detach().numpy().clip(0, 1)
+      output_image = output.cpu().permute(0, 2, 3, 1)[0].detach().numpy().clip(0, 1)
+      batch_image = batch_input.cpu().permute(0, 2, 3, 1)[0].detach().numpy().clip(0, 1)
+
+      fig, axs = plt.subplots(1, 3)
+      axs[0].imshow(batch_image, cmap="gray", interpolation='nearest')
+      axs[1].imshow(target_image, cmap="gray")
+      axs[2].imshow(output_image, cmap="gray")
+      axs[0].set_title("Input")
+      axs[1].set_title("Target")
+      axs[2].set_title("Output")
       plt.show()
 
 # train()
