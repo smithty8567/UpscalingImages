@@ -101,7 +101,7 @@ class SRResNet(nn.Module):
 
 def train():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-  dataset = UpscaleDataset()
+  dataset = UpscaleDataset(filepath="Datasets/Manga/Train")
   model, epoch = SRResNet.load("Models/sr_model.pt")
   model = model.to(device)
   loader = DataLoader(dataset, batch_size=32, shuffle=True)
@@ -178,5 +178,5 @@ def test():
     plt.waitforbuttonpress()
     plt.show()
 
-# train()
-test()
+train()
+# test()

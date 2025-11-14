@@ -48,4 +48,4 @@ def train(epochs=1000, lr=0.0001, save_every=1000, loss_every=100, batch_size=32
         print(f"Saving model at epoch {i+1} on batch {j}/{len(loader)}")
         Upscaling.save(model, "Models/manga_model_2.pt", i)
         
-train()
+# train()
