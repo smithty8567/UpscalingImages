@@ -47,7 +47,62 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
   def __init__(self):
     super().__init__()
-    pass
+
+    self.conv1 = nn.Sequential(
+      nn.Conv2d(1, 64, 9, 1, 4), # 128x128
+      nn.LeakyReLU(0.2, inplace=True)
+    )
+
+    self.conv_block = nn.Sequential(
+      nn.Conv2d(64, 64, 3, 2, 1), # 64x64
+      nn.BatchNorm2d(64),
+      nn.LeakyReLU(0.2, inplace=True),
+
+      nn.Conv2d(64, 128, 3, 1, 1),
+      nn.BatchNorm2d(128),
+      nn.LeakyReLU(0.2, inplace=True),
+
+      nn.Conv2d(128, 128, 3, 2, 1), # 32x32
+      nn.BatchNorm2d(128),
+      nn.LeakyReLU(0.2, inplace=True),
+
+      nn.Conv2d(128, 256, 3, 1, 1),
+      nn.BatchNorm2d(256),
+      nn.LeakyReLU(0.2, inplace=True),
+
+      nn.Conv2d(256, 256, 3, 2, 1), # 16x16
+      nn.BatchNorm2d(256),
+      nn.LeakyReLU(0.2, inplace=True),
+
+      nn.Conv2d(256, 512, 3, 1, 1),
+      nn.BatchNorm2d(512),
+      nn.LeakyReLU(0.2, inplace=True),
+
+      nn.Conv2d(512, 512, 3, 2, 1), # 8x8
+      nn.BatchNorm2d(512),
+      nn.LeakyReLU(0.2, inplace=True)
+    )
+
+    self.linear = nn.Sequential(
+      nn.Flatten(),
+      nn.Linear(512 * 8 * 8, 1024),
+      nn.LeakyReLU(0.2, inplace=True),
+      nn.Linear(1024, 1)
+    )
+
+  def forward(self, x):
+    x = self.conv1(x)
+    x = self.conv_block(x)
+    x = self.linear(x)
+    return x
+
+  @staticmethod
+  def save(model, path, epoch):
+    torch.save({
+      'epoch': epoch,
+      'state_dict': model.state_dict()
+    }, path + '.tmp')
+    os.replace(path + '.tmp', path)
 
   @staticmethod
   def load(path):
