@@ -29,6 +29,17 @@ class Generator(nn.Module):
     return x
 
   @staticmethod
+  def save(model, path, epoch):
+    try:
+      torch.save({
+        'state_dict': model.state_dict(),
+        'epoch': epoch
+      }, path + '.tmp')
+      os.replace(path + '.tmp', path)
+    except Exception as e:
+      print(f"Error saving checkpoint: {e}")
+
+  @staticmethod
   def load(path, sr_path=None):
       try:
         data = torch.load(path, weights_only=True, map_location='cpu')
@@ -98,11 +109,14 @@ class Discriminator(nn.Module):
 
   @staticmethod
   def save(model, path, epoch):
-    torch.save({
-      'epoch': epoch,
-      'state_dict': model.state_dict()
-    }, path + '.tmp')
-    os.replace(path + '.tmp', path)
+    try:
+      torch.save({
+        'epoch': epoch,
+        'state_dict': model.state_dict()
+      }, path + '.tmp')
+      os.replace(path + '.tmp', path)
+    except Exception as e:
+      print(f"Error saving checkpoint: {e}")
 
   @staticmethod
   def load(path):
@@ -127,13 +141,10 @@ def train():
   dis = dis.to(device)
   gen_opt = optim.Adam(gen.parameters(), lr=0.0001, betas=(0.9, 0.999))
   dis_opt = optim.Adam(dis.parameters(), lr=0.0001, betas=(0.9, 0.999))
-  total_loss = 0
-  n_losses = 0
-  batch = 0
-
-  # Losses
   adversarial_loss = nn.BCEWithLogitsLoss()
   upscale_loss = SR.CharbonnierLoss()
+  total_loss = 0
+  n_losses = 0
 
   for i in range(epoch, 10000):
     prog_bar = tqdm(loader)
@@ -174,9 +185,8 @@ def train():
 
         total_loss += gen_loss.item()
         n_losses += 1
-        batch += 1
 
-      if batch % 100 == 0:
+      if n_losses == 100:
         print(f"Saving model at epoch {i+1} on batch {j}/{len(prog_bar)} with loss {total_loss/n_losses}")
         Generator.save(gen, "Models/sr_gen.pt", i)
         Discriminator.save(dis, "Models/sr_dis.pt", i)
