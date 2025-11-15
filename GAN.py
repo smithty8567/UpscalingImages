@@ -10,7 +10,7 @@ from Data import UpscaleDataset
 import SRResNet as SR
 
 
-class GAN(nn.Module):
+class Generator(nn.Module):
   def __init__(self, num_blocks=16):
     super().__init__()
 
@@ -32,11 +32,11 @@ class GAN(nn.Module):
   def load(path):
       try:
           data = torch.load(path, weights_only=True, map_location='cpu')
-          model = GAN()
+          model = Generator()
           model.load_state_dict(data['state_dict'])
           print(f"Loaded from checkpoint at epoch {data['epoch'] + 1}")
           return model, data['epoch']
       except Exception as e:
           print(f"Error loading checkpoint: {e}")
           print("Creating new model...")
-          return GAN(), 0
+          return Generator(), 0

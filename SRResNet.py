@@ -1,4 +1,5 @@
 import os
+import cv2
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -149,22 +150,37 @@ def test():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   model, _ = SRResNet.load("Models/sr_model.pt")
   model = model.to(device)
-  dataset = UpscaleDataset()
-  loader = DataLoader(dataset, batch_size=100, shuffle=False)
-  batch_input, batch_target = next(iter(loader))
+  dataset = UpscaleDataset(in_size=128, out_size=256)
+  loader = DataLoader(dataset, batch_size=1, shuffle=True)
 
-  batch_input = batch_input.to(device)
-  batch_target = batch_target.to(device)
+  for batch_input, batch_target in loader:
+    batch_input = batch_input.to(device)
+    batch_target = batch_target.to(device)
 
-  output = model(batch_input)
-  output = torch.clamp(output, 0, 1)
+    with torch.no_grad():
+      output = model(batch_input) # x4
+      # output = model(output) # x16
+      # output = model(output) # x64
 
-  for i in range(100):
-    output_image = output.cpu().permute(0, 2, 3, 1)[i].detach().numpy().clip(0, 1)
-    target_image = batch_target.cpu().permute(0, 2, 3, 1)[i].detach().numpy().clip(0, 1)
-    input_image = batch_input.cpu().permute(0, 2, 3, 1)[i].detach().numpy().clip(0, 1)
+    output = torch.clamp(output, 0, 1)
 
+    output_cpu = output.detach().cpu().permute(0, 2, 3, 1).numpy()
+    target_cpu = batch_target.detach().cpu().permute(0, 2, 3, 1).numpy()
+    input_cpu = batch_input.detach().cpu().permute(0, 2, 3, 1).numpy()
+    
+    output_image = output_cpu[0].clip(0, 1)
+    target_image = target_cpu[0].clip(0, 1)
+    input_image = input_cpu[0].clip(0, 1)
+    
     fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+
+    def save_output(event):
+      if event.key == 'w':
+        n_files = len(os.listdir('Images'))
+        cv2.imwrite(f"Images/srresnet_{n_files}.png", (output_image * 255).astype('uint8'))
+
+    fig.canvas.mpl_connect('key_press_event', save_output)
+
     axs[0].imshow(input_image, cmap="gray", interpolation='nearest')
     axs[1].imshow(target_image, cmap="gray")
     axs[2].imshow(output_image, cmap="gray")
@@ -178,5 +194,5 @@ def test():
     plt.waitforbuttonpress()
     plt.show()
 
-train()
-# test()
+# train()
+test()
