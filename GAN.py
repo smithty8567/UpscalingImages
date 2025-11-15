@@ -133,19 +133,21 @@ class Discriminator(nn.Module):
 
 def train():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-  dataset = UpscaleDataset(filepath="Datasets/Manga/Train")
+  dataset = UpscaleDataset(filepath="Datasets/Manga/Train", in_size=64, out_size=128, color=False)
   loader = DataLoader(dataset, batch_size=32, shuffle=True)
-  gen, epoch = Generator.load("Models/sr_gen.pt", "Models/sr_model.pt")
-  dis, _ = Discriminator.load("Models/sr_dis.pt")
+  gen, epoch = Generator.load("Models/sr_gen_3.pt", "Models/sr_model.pt")
+  dis, _ = Discriminator.load("Models/sr_dis_3.pt")
   gen = gen.to(device)
   dis = dis.to(device)
   gen_opt = optim.Adam(gen.parameters(), lr=0.0001, betas=(0.9, 0.999))
-  dis_opt = optim.Adam(dis.parameters(), lr=0.0001, betas=(0.9, 0.999))
+  dis_opt = optim.Adam(dis.parameters(), lr=0.00007, betas=(0.9, 0.999))
   adversarial_loss = nn.BCEWithLogitsLoss()
   upscale_loss = SR.CharbonnierLoss()
-  total_loss = 0
+  gen_total_loss = 0
+  dis_total_loss = 0
+  adv_total_loss = 0
   n_losses = 0
-
+  
   for i in range(epoch, 10000):
     prog_bar = tqdm(loader)
     for j, (batch_input, batch_target) in enumerate(prog_bar):
@@ -159,16 +161,18 @@ def train():
         
         # Fake loss
         fake_prob = dis(sr)
-        fake_loss = adversarial_loss(fake_prob, torch.zeros_like(fake_prob))
+        fake_loss = F.relu(1 + fake_prob).mean()
 
         # Real loss
         real_prob = dis(batch_target)
-        real_loss = adversarial_loss(real_prob, torch.ones_like(real_prob) * 0.9)
+        real_loss = F.relu(0.9 - real_prob).mean()
 
         # Total loss
         dis_loss = (fake_loss + real_loss) * 0.5
         dis_loss.backward()
         dis_opt.step()
+
+        dis_total_loss += dis_loss.item()
       else:
         # 2) Train Generator
         gen_opt.zero_grad()
@@ -176,26 +180,34 @@ def train():
         prob = dis(sr)
 
         # Combine adversarial and upscale losses
-        adv_loss = adversarial_loss(prob, torch.ones_like(prob))
+        avd_loss = -prob.mean()
         rec_loss = upscale_loss(sr, batch_target)
-        gen_loss = 0.001 * adv_loss + rec_loss
+        gen_loss = rec_loss + 0.0005 * avd_loss
 
         gen_loss.backward()
         gen_opt.step()
 
-        total_loss += gen_loss.item()
-        n_losses += 1
+        adv_total_loss += avd_loss.item()
+        gen_total_loss += gen_loss.item()
+      
+      n_losses += 1
 
       if n_losses == 100:
-        print(f"Saving model at epoch {i+1} on batch {j}/{len(prog_bar)} with loss {total_loss/n_losses}")
-        Generator.save(gen, "Models/sr_gen.pt", i)
-        Discriminator.save(dis, "Models/sr_dis.pt", i)
-        total_loss = 0
+        gen_loss = gen_total_loss / n_losses * 2
+        dis_loss = dis_total_loss / n_losses * 2
+        adv_loss = adv_total_loss / n_losses * 2
+        prog_bar.set_postfix(gen_loss=gen_loss, dis_loss=dis_loss, adv_loss=adv_loss)
+        Generator.save(gen, "Models/sr_gen_3.pt", i)
+        Discriminator.save(dis, "Models/sr_dis_3.pt", i)
+        gen_total_loss = 0
+        dis_total_loss = 0
+        adv_total_loss = 0
         n_losses = 0
 
+
 def test():
-  model = Generator.load("Models/sr_gen.pt")
+  model, _ = Generator.load("Models/sr_gen_2.pt")
   test_model(model, 64, 128)
 
-train()
-# test()
+# train()
+test()
