@@ -138,7 +138,7 @@ def interpolate_models(model_a: nn.Module, model_b: nn.Module, alpha=0.5):
   state_c = model_c.state_dict()
 
   for key in state_a.keys():
-    state_c[key] = state_a[key] * alpha + state_b[key] * (1 - alpha)
+    state_c[key] = state_a[key] * (1 - alpha) + state_b[key] * alpha
 
   model_c.load_state_dict(state_c)
   return model_c
@@ -218,8 +218,8 @@ def train():
 
 def test():
   model_a = Generator.load("Models/sr_gen_2.pt")[0]
-  model_b, _ = SR.SRResNet.load("Models/sr_model.pt")
-  model_c = interpolate_models(model_a, model_b, 0.5)
+  model_b = Generator.load("", "Models/sr_model.pt")[0]
+  model_c = interpolate_models(model_a, model_b, 0.3)
   test_model(model_c, model_b, 64, 128)
 
 # train()
