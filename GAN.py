@@ -47,7 +47,7 @@ class Generator(nn.Module):
         data = torch.load(path, weights_only=True, map_location='cpu')
         model = Generator()
         model.load_state_dict(data['state_dict'])
-        print(f"Loaded from checkpoint at epoch {data['epoch'] + 1}")
+        print(f"Loaded from checkpoint at epoch {data['epoch'] + 1} and iter {data['iter']}")
         return model, data['epoch'], data['iter']
       except Exception as e:
         print(f"Error loading checkpoint: {e}")
@@ -130,7 +130,7 @@ class Discriminator(nn.Module):
       data = torch.load(path, weights_only=True, map_location='cpu')
       model = Discriminator()
       model.load_state_dict(data['state_dict'])
-      print(f"Loaded from checkpoint at epoch {data['epoch'] + 1}")
+      print(f"Loaded from checkpoint at epoch {data['epoch'] + 1} and iter {data['iter']}")
       return model, data['epoch'], data['iter']
     except Exception as e:
       print(f"Error loading checkpoint: {e}")
@@ -322,5 +322,5 @@ def test():
   # model_c = interpolate_models(model_a, model_b, 0.3)
   test_model(model_a, model_b, 64, 128)
 
-train()
-# test()
+# train()
+test()
