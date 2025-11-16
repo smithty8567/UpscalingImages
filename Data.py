@@ -77,6 +77,10 @@ def process_image(path, process_size, out_size, compress, color):
     # Reads image, normalizes, converts to grayscale
     image = cv2.imread(path, cv2.IMREAD_GRAYSCALE)#[100:400, 100:400]
     
+    # Random resize
+    scale = random.uniform(0.8, 1.2)
+    image = cv2.resize(image, (0, 0), fx=scale, fy=scale)
+
     # Random out_size x out_size image
     x = random.randint(100, image.shape[0] - out_size - 100)
     y = random.randint(100, image.shape[1] - out_size - 100)
@@ -100,8 +104,8 @@ def process_image(path, process_size, out_size, compress, color):
 
   return processed_image, image
 
-# Creates array of image directories
 def generate_directory_list(filepath, samples):
+  """Creates array of image directories."""
   directories = []
   for root, dirs, files in tqdm.tqdm(os.walk(filepath)):
     for file in files:
@@ -111,7 +115,6 @@ def generate_directory_list(filepath, samples):
       if samples is not None and len(directories) > samples:
         break
   return directories
-
 
 class UpscaleDataset(Dataset):
   """

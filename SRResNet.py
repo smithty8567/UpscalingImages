@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from tqdm import tqdm
 from Data import UpscaleDataset, to_image, to_patches
 import Transformer as ST
-import TestUpscale
+from TestUpscale import test_model
 
 class CharbonnierLoss(nn.Module):
   """A differentiable version of L1 loss (Mean Absolute Error)
@@ -65,8 +65,6 @@ class SRResNet(nn.Module):
       nn.Conv2d(64, 64, kernel_size=3, padding=1)
     )
 
-    self.transformer = ST.TransformerEncoder(64 * 8 * 8, 1024, 1, 2)
-
     self.upscale = UpscaleBlock(64, scale=2)
 
     self.final = nn.Conv2d(64, 1, kernel_size=9, padding=4)
@@ -76,11 +74,6 @@ class SRResNet(nn.Module):
     x_res = self.res_blocks(x_head)
     x_trunk = self.trunk_conv(x_res)
     x = x_head + x_trunk
-
-    x = to_patches(x, 8)
-    x = self.transformer(x)
-    x = to_image(x, 8)
-
     x = self.upscale(x)
     x = self.final(x)
     return x
@@ -112,7 +105,7 @@ class SRResNet(nn.Module):
 def train():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   dataset = UpscaleDataset(filepath="Datasets/Manga/Train")
-  model, epoch = SRResNet.load("Models/sr_model_trans.pt")
+  model, epoch = SRResNet.load("Models/sr_model.pt")
   model = model.to(device)
   loader = DataLoader(dataset, batch_size=32, shuffle=True)
   loss_fn = CharbonnierLoss()
@@ -153,11 +146,11 @@ def train():
       if batch % 2000 == 0:
         last_saved = f"Epoch {i+1} batch {j}"
         prog_bar.set_postfix(loss=last_loss, saved=last_saved)
-        SRResNet.save(model, "Models/sr_model_trans.pt", i)
+        SRResNet.save(model, "Models/sr_model.pt", i)
 
 def test():
   model = SRResNet.load("Models/sr_model.pt")[0]
-  TestUpscale.test_model(model, model, 64, 128)
+  test_model(model, model, 64, 128)
 
-train()
+# train()
 # test()
