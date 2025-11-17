@@ -72,14 +72,17 @@ def process_image(path, process_size, out_size, compress, color):
     image = torch.from_numpy(image).float()
     image = image.permute(2, 0, 1)
     image = image.contiguous()
-
   else:
     # Reads image, normalizes, converts to grayscale
     image = cv2.imread(path, cv2.IMREAD_GRAYSCALE)#[100:400, 100:400]
     
     # Random resize
-    scale = random.uniform(0.8, 1.2)
-    image = cv2.resize(image, (0, 0), fx=scale, fy=scale)
+    scale = random.uniform(0.9, 1.1)
+    new_width = int(image.shape[1] * scale)
+    new_height = int(image.shape[0] * scale)
+    new_width = max(new_width, out_size)
+    new_height = max(new_height, out_size)
+    image = cv2.resize(image, (new_width, new_height), interpolation=interpolation)
 
     # Random out_size x out_size image
     x = random.randint(100, image.shape[0] - out_size - 100)
