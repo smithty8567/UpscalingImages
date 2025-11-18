@@ -21,15 +21,22 @@ def get_model_output(y: torch.Tensor, crcb: np.ndarray):
   output_image = output_image
   return output_image
 
-# model = Generator.load("Models/sr_gen_3.pt")[0]
-model_a = Generator.load("Models/sr_gen_3.pt")[0]
-model_b = Generator.load("", "Models/sr_model.pt")[0]
-model_c = interpolate_models(model_a, model_b, 0.3)
-model = model_b
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-rgb = cv2.imread("test.jpg")
+# model = Generator.load("Models/sr_gen_3.pt")[0]
+model_a = Generator.load("Models/sr_gen_4.pt")[0]
+# model_b = Generator.load("", "Models/sr_rrdb.pt")[0]
+# model_c = interpolate_models(model_a, model_b, 0.3)
+model = model_a
+
+model = model.to(device)
+model.eval()
+
+rgb = cv2.imread("input.png")
+rgb = cv2.resize(rgb, (rgb.shape[1] // 2, rgb.shape[0] // 2))
 y, crcb = get_model_input(rgb)
+y = y.to(device).detach()
 y = model(y)
 output_image = get_model_output(y, crcb)
-cv2.imwrite("output3.png", output_image)
+cv2.imwrite("output.png", output_image)
 

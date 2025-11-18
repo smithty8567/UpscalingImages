@@ -133,7 +133,7 @@ def train():
   model, epoch = RRDBNet.load("Models/sr_rrdb.pt")
   model = model.to(device)
   loader = DataLoader(dataset, batch_size=16, shuffle=True)
-  loss_fn = CharbonnierLoss()
+  loss_fn = nn.L1Loss()
   scaler = torch.amp.GradScaler('cuda')
   adam = optim.Adam(model.parameters(), lr=0.00002)
   total_loss = 0
@@ -177,5 +177,5 @@ def test():
   model = RRDBNet.load("Models/sr_rrdb.pt")[0]
   test_model(model, None, 64, 256)
 
-train()
+# train()
 # test()

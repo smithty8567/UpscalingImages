@@ -9,15 +9,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import SRResNet as SR
+import ESRGAN as ES
 import torchvision
 
 class Generator(nn.Module):
-  def __init__(self, num_blocks=16):
+  def __init__(self, num_blocks=23):
     super().__init__()
 
-    self.sr = SR.SRResNet(num_blocks=num_blocks)
+    self.sr = ES.RRDBNet(num_blocks=num_blocks)
 
-  def load_srresnet(self, path):
+  def load_net(self, path):
     try:
       data = torch.load(path, weights_only=True, map_location='cpu')
       self.sr.load_state_dict(data['state_dict'])
@@ -54,7 +55,7 @@ class Generator(nn.Module):
         print("Creating new model...")
         model = Generator()
         if sr_path is not None:
-          model.load_srresnet(sr_path)
+          model.load_net(sr_path)
         return model, 0, 0
 
 class Discriminator(nn.Module):
@@ -62,12 +63,12 @@ class Discriminator(nn.Module):
     super().__init__()
 
     self.conv1 = nn.Sequential(
-      nn.Conv2d(1, 64, 9, 1, 4), # 128x128
+      nn.Conv2d(1, 64, 9, 1, 4), # 256x256
       nn.LeakyReLU(0.2, inplace=True)
     )
 
     self.conv_block = nn.Sequential(
-      nn.Conv2d(64, 64, 3, 2, 1), # 64x64
+      nn.Conv2d(64, 64, 3, 2, 1), # 128x128
       nn.BatchNorm2d(64),
       nn.LeakyReLU(0.2, inplace=True),
 
@@ -75,7 +76,7 @@ class Discriminator(nn.Module):
       nn.BatchNorm2d(128),
       nn.LeakyReLU(0.2, inplace=True),
 
-      nn.Conv2d(128, 128, 3, 2, 1), # 32x32
+      nn.Conv2d(128, 128, 3, 2, 1), # 64x64
       nn.BatchNorm2d(128),
       nn.LeakyReLU(0.2, inplace=True),
 
@@ -83,7 +84,7 @@ class Discriminator(nn.Module):
       nn.BatchNorm2d(256),
       nn.LeakyReLU(0.2, inplace=True),
 
-      nn.Conv2d(256, 256, 3, 2, 1), # 16x16
+      nn.Conv2d(256, 256, 3, 2, 1), # 32x32
       nn.BatchNorm2d(256),
       nn.LeakyReLU(0.2, inplace=True),
 
@@ -91,8 +92,16 @@ class Discriminator(nn.Module):
       nn.BatchNorm2d(512),
       nn.LeakyReLU(0.2, inplace=True),
 
-      nn.Conv2d(512, 512, 3, 2, 1), # 8x8
+      nn.Conv2d(512, 512, 3, 2, 1), # 16x16
       nn.BatchNorm2d(512),
+      nn.LeakyReLU(0.2, inplace=True),
+
+      nn.Conv2d(512, 1024, 3, 1, 1),
+      nn.BatchNorm2d(1024),
+      nn.LeakyReLU(0.2, inplace=True),
+
+      nn.Conv2d(1024, 1024, 3, 2, 1), # 8x8
+      nn.BatchNorm2d(1024),
       nn.LeakyReLU(0.2, inplace=True)
     )
 
@@ -101,7 +110,7 @@ class Discriminator(nn.Module):
 
     self.linear = nn.Sequential(
       nn.Flatten(),
-      nn.Linear(512 * 8 * 8, 1024),
+      nn.Linear(1024 * 8 * 8, 1024),
       nn.LeakyReLU(0.2, inplace=True),
       nn.Linear(1024, 1)
     )
@@ -185,13 +194,6 @@ class PerceptualLoss(nn.Module):
 
     return torch.mean((x - y) ** 2)
 
-class L1Loss(nn.Module):
-  def __init__(self):
-    super().__init__()
-
-  def forward(self, x, y):
-    return torch.mean(torch.abs(x - y))
-
 def interpolate_models(model_a: nn.Module, model_b: nn.Module, alpha=0.5):
   model_c = type(model_a)()
   state_a = model_a.state_dict()
@@ -217,12 +219,12 @@ def train():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   
   # Data
-  dataset = UpscaleDataset(filepath="Datasets/Manga/Train", in_size=64, out_size=128, color=False)
-  loader = DataLoader(dataset, batch_size=16, shuffle=True)
+  dataset = UpscaleDataset(filepath="Datasets/Manga/Train", in_size=64, out_size=256, color=False)
+  loader = DataLoader(dataset, batch_size=8, shuffle=True)
   
   # Models
-  gen, epoch, iter = Generator.load("Models/sr_gen_3.pt", "Models/sr_model.pt")
-  dis = Discriminator.load("Models/sr_dis_3.pt")[0]
+  gen, epoch, iter = Generator.load("Models/sr_gen_4.pt", "Models/sr_rrdb.pt")
+  dis = Discriminator.load("Models/sr_dis_4.pt")[0]
   gen = gen.to(device)
   dis = dis.to(device)
   
@@ -231,7 +233,7 @@ def train():
   dis_opt = optim.Adam(dis.parameters(), lr=0.0001, betas=(0.9, 0.999))
   
   # Losses
-  l1_loss_fn = L1Loss()
+  l1_loss_fn = nn.L1Loss()
   perceptual_loss_fn = PerceptualLoss()
   perceptual_loss_fn.to(device)
   
@@ -253,7 +255,7 @@ def train():
       batch_input = batch_input.to(device)
       batch_target = batch_target.to(device)
       
-      if (iter % 3) != 0:
+      if (iter % 2) != 0:
         # 1) Train Discriminator
         dis_opt.zero_grad()
         sr = gen(batch_input).detach()
@@ -313,14 +315,14 @@ def train():
         prc_loss, prc_total_loss = prc_total_loss / 100, 0
         l1_loss, l1_total_loss = l1_total_loss / 100, 0
         prog_bar.set_postfix(gen_loss=gen_loss, dis_loss=dis_loss, adv_loss=adv_loss, prc_loss=prc_loss, l1_loss=l1_loss)
-        Generator.save(gen, "Models/sr_gen_3.pt", i, iter)
-        Discriminator.save(dis, "Models/sr_dis_3.pt", i, iter)
+        Generator.save(gen, "Models/sr_gen_4.pt", i, iter)
+        Discriminator.save(dis, "Models/sr_dis_4.pt", i, iter)
 
 def test():
-  model_a = Generator.load("Models/sr_gen_3.pt")[0]
-  model_b = Generator.load("", "Models/sr_model.pt")[0]
+  model_a = Generator.load("Models/sr_gen_4.pt")[0]
+  model_b = Generator.load("", "Models/sr_rrdb.pt")[0]
   # model_c = interpolate_models(model_a, model_b, 0.3)
-  test_model(model_a, model_b, 64, 128)
+  test_model(model_a, model_b, 64, 256)
 
 # train()
 test()
