@@ -245,6 +245,6 @@ def filter_images():
     if image.shape[0] < 128 or image.shape[1] < 128:
       os.remove(path)
 
-test_patches()
+# test_patches()
 # segment_images()
 # filter_images()

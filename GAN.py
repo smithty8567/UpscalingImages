@@ -233,8 +233,8 @@ def train():
   loader = DataLoader(dataset, batch_size=10, shuffle=True)
   
   # Models
-  gen, epoch, iter = Generator.load("Models/sr_gen_wallpapers_3.pt", "Models/sr_rrdb_wallpapers.pt")
-  dis = Discriminator.load("Models/sr_dis_wallpapers_3.pt")[0]
+  gen, epoch, iter = Generator.load("Models/sr_gen_wallpapers_4.pt", "Models/sr_rrdb_wallpapers.pt")
+  dis = Discriminator.load("Models/sr_dis_wallpapers_4.pt")[0]
   gen = gen.to(device)
   dis = dis.to(device)
   
@@ -309,7 +309,7 @@ def train():
 
         l1_loss = l1_loss_fn(sr, batch_target)
         perceptual_loss = perceptual_loss_fn(sr * 2 - 1, batch_target * 2 - 1).mean()
-        gen_loss = perceptual_loss + 0.01 * l1_loss + 0.01 * adv_loss
+        gen_loss = perceptual_loss + 0.005 * l1_loss + 0.001 * adv_loss
 
         gen_loss.backward()
         gen_opt.step()
@@ -326,14 +326,14 @@ def train():
         prc_loss, prc_total_loss = prc_total_loss / 100, 0
         l1_loss, l1_total_loss = l1_total_loss / 100, 0
         prog_bar.set_postfix(gen_loss=gen_loss, dis_loss=dis_loss, adv_loss=adv_loss, prc_loss=prc_loss, l1_loss=l1_loss)
-        Generator.save(gen, "Models/sr_gen_wallpapers_3.pt", i, iter)
-        Discriminator.save(dis, "Models/sr_dis_wallpapers_3.pt", i, iter)
+        Generator.save(gen, "Models/sr_gen_wallpapers_4.pt", i, iter)
+        Discriminator.save(dis, "Models/sr_dis_wallpapers_4.pt", i, iter)
 
 def test():
-  model_a = Generator.load("Models/sr_gen_wallpapers_3.pt")[0]
+  model_a = Generator.load("Models/sr_gen_wallpapers_4.pt")[0]
   model_b = Generator.load("", "Models/sr_rrdb_wallpapers.pt")[0]
   # model_c = interpolate_models(model_a, model_b, 0.3)
-  test_model(model_a, model_b, 64, 256, True)
+  test_model(model_a, model_b, 64, 128, True)
 
 # train()
 test()

@@ -9,7 +9,7 @@ import cv2
 def test_model(model, old_model=None, in_size=64, out_size=128, color=False):
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   model = model.to(device)
-  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Test1", in_size=in_size, out_size=out_size, color=color)
+  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=in_size, out_size=out_size, color=color)
   loader = DataLoader(dataset, batch_size=1, shuffle=True)
   model_name = type(model).__name__
 
@@ -29,9 +29,9 @@ def test_model(model, old_model=None, in_size=64, out_size=128, color=False):
 
     with torch.no_grad():
       output = model(batch_input)
-      output = model(output)
+      # output = model(output)
       old_output = old_model(batch_input)
-      old_output = old_model(old_output)
+      # old_output = old_model(old_output)
 
     output = torch.clamp(output, 0, 1)
     old_output = torch.clamp(old_output, 0, 1)
