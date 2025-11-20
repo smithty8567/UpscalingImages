@@ -6,6 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from torchvision.io import encode_jpeg, decode_jpeg
 
 def to_patches(image_batch, patch_size):
   # Image Batch Shape: (Batch, Color Channels, Height, Width)
@@ -48,101 +49,6 @@ def to_image(patched_batch, patch_size):
   # (B, C, H, W)
   return image_batch
 
-def np_to_tensor(image):
-  return torch.from_numpy(image / 255).permute(2, 0, 1).float()
-
-def tensor_to_np(image):
-  return (image.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
-
-def process_image(path, process_size, out_size, compress, color):
-  interpolation = random.choice([cv2.INTER_NEAREST, cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA])
-  if color:
-    # return process_color_image(path, process_size, out_size)
-
-    # Loads image
-    image = cv2.imread(path)#[100:400, 100:400]
-
-    # Random resize
-    # scale = random.uniform(0.9, 1.1)
-    # new_width = int(image.shape[1] * scale)
-    # new_height = int(image.shape[0] * scale)
-    # new_width = max(new_width, out_size)
-    # new_height = max(new_height, out_size)
-    # image = cv2.resize(image, (new_width, new_height), interpolation=interpolation)
-
-    random_out_size = out_size
-    # random_out_size = int(out_size * random.uniform(1.0, 4.0))
-    # random_out_size = min(random_out_size, image.shape[0], image.shape[1])
-
-    # Random out_size x out_size image
-    x = random.randint(0, image.shape[0] - random_out_size)
-    y = random.randint(0, image.shape[1] - random_out_size)
-    image = image[x:x+random_out_size, y:y+random_out_size]
-    # image = cv2.resize(image, (out_size, out_size), interpolation=interpolation)
-
-    # resized = cv2.resize(image, (process_size, process_size), interpolation=interpolation)
-    # Y, Cr, Cb = cv2.split(cv2.cvtColor(resized, cv2.COLOR_BGR2YCR_CB))
-    # _, encode = cv2.imencode('.jpg', Y, [cv2.IMWRITE_JPEG_QUALITY, compress])
-    # y_decode = cv2.imdecode(encode, -1)
-    # merge = cv2.merge([y_decode, Cr, Cb])
-    # processed = cv2.cvtColor(merge, cv2.COLOR_YCR_CB2RGB) / 255
-
-    processed_image = image
-    
-    # Random blur
-    # if random.random() < 0.5:
-    #   ksize = random.choice([3,5])
-    #   sigma_x = random.uniform(0.1, 3.0)
-    #   sigma_y = random.uniform(0.1, 3.0)
-    #   processed_image = cv2.GaussianBlur(processed_image, (ksize, ksize), sigmaX=sigma_x, sigmaY=sigma_y)
-
-    # Resizes image and permutes image to (Color, Height, Width) dtype = float32
-    processed_image = cv2.resize(processed_image, (process_size, process_size), interpolation=interpolation)
-    process_image = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
-    processed_image = torch.from_numpy(process_image).float() / 255
-    processed_image = processed_image.permute(2, 0, 1)
-    processed_image = processed_image.contiguous()
-
-    # Convert image to tensor and permute image to (Color, Height, Width) dtype = float32
-    image = cv2.resize(image[:,:,::-1] / 255., (out_size, out_size), interpolation=interpolation)
-    image = torch.from_numpy(image).float()
-    image = image.permute(2, 0, 1)
-    image = image.contiguous()
-  else:
-    # Reads image, normalizes, converts to grayscale
-    image = cv2.imread(path, cv2.IMREAD_GRAYSCALE)#[100:400, 100:400]
-    
-    # Random resize
-    scale = random.uniform(0.9, 1.1)
-    new_width = int(image.shape[1] * scale)
-    new_height = int(image.shape[0] * scale)
-    new_width = max(new_width, out_size)
-    new_height = max(new_height, out_size)
-    image = cv2.resize(image, (new_width, new_height), interpolation=interpolation)
-
-    # Random out_size x out_size image
-    x = random.randint(100, image.shape[0] - out_size - 100)
-    y = random.randint(100, image.shape[1] - out_size - 100)
-    image = image[x:x+out_size, y:y+out_size]
-
-    processed = cv2.resize(image, (process_size, process_size), interpolation=interpolation)
-    _, encode = cv2.imencode('.jpg', processed, [cv2.IMWRITE_JPEG_QUALITY, compress])
-    y_decode = cv2.imdecode(encode, -1)
-    processed = y_decode
-
-    # Resizes image and converts to tensor
-    processed_image = torch.from_numpy(processed).float()
-    processed_image = processed_image.unsqueeze(0)
-    processed_image = processed_image / 255
-
-    # Converts original image to tensor, reshapes both images to (1, Height, Width)
-    # image = cv2.resize(image, (out_size, out_size), interpolation=interpolation)
-    image = torch.from_numpy(image).float()
-    image = image.unsqueeze(0)
-    image = image / 255
-
-  return processed_image, image
-
 def generate_directory_list(filepath, samples):
   """Creates array of image directories."""
   directories = []
@@ -154,6 +60,88 @@ def generate_directory_list(filepath, samples):
       if samples is not None and len(directories) > samples:
         break
   return directories
+
+class ImageProcessing:
+  def __init__(self):
+    pass
+
+  def get_target_image(self, image, out_size):
+    """
+    Input : HWC, BGR, 0-255, numpy
+    Output : CHW, RGB, 0-1, tensor
+    """
+    
+    # Inter nearest excluded to avoid misalignment issues
+    interpolation = random.choice([cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA])
+
+    # Find a starting size that is at least out_size
+    start_size = random.randint(out_size, min(image.shape[0], image.shape[1]))
+
+    # Random start_size x start_size image
+    x = random.randint(0, image.shape[0] - start_size)
+    y = random.randint(0, image.shape[1] - start_size)
+    image = image[x:x+start_size, y:y+start_size]
+
+    # Resize to out_size
+    image = cv2.resize(image, (out_size, out_size), interpolation=interpolation)
+
+    # Convert to tensor
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = image / 255.0
+    image = torch.from_numpy(image).permute(2, 0, 1).float()
+    image = image.clip(0, 1)
+
+    return image
+  
+  def get_input_image(self, in_size, image):
+    """
+    Input : CHW, RGB, 0-1, tensor
+    Output : CHW, RGB, 0-1, tensor
+    """
+
+    # Convert to numpy
+    image = (image.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
+
+    # Inter nearest excluded to avoid misalignment issues
+    interpolation = random.choice([cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA])
+
+    # Apply blur
+    if random.random() < 0.2:
+      kernel = random.choice([3,5])
+      sigma_x = random.uniform(0.1, 3.0)
+      sigma_y = random.uniform(0.1, 3.0)
+      image = cv2.GaussianBlur(image, (kernel, kernel), sigmaX=sigma_x, sigmaY=sigma_y)
+
+    # Resize to in_size
+    image = cv2.resize(image, (in_size, in_size), interpolation=interpolation)
+
+    # Add noise (gaussian, poisson)
+    if random.random() < 0.2:
+      noise_type = random.choice(['color', 'bw'])
+      image = image / 255.0
+      dims = 3 if noise_type == 'color' else 1
+      mean = 0
+      var = random.uniform(0.00005, 0.002)
+      sigma = var ** 0.5
+      gauss = np.random.normal(mean, sigma, (image.shape[0], image.shape[1], dims))
+      image = image + gauss
+      image = np.clip(image, 0, 1)
+      image = (image * 255).astype(np.uint8)
+
+    # Convert to tensor
+    image = torch.from_numpy(image).permute(2, 0, 1)
+
+    # JPEG Compression
+    if random.random() < 0.5:
+      quality = random.randint(70, 100)
+      jpeg_image = encode_jpeg(image, quality=quality)
+      image = decode_jpeg(jpeg_image).float()
+    
+    # Normalize and clip
+    image = image / 255.0
+    image = image.clip(0, 1)
+    
+    return image
 
 class UpscaleDataset(Dataset):
   """
@@ -176,17 +164,21 @@ class UpscaleDataset(Dataset):
     self.in_size = in_size
     self.out_size = out_size
     self.color = color
+    self.image_processing = ImageProcessing()
     
   def __len__(self):
     return len(self.directories)
 
   def __getitem__(self, idx):
     image = self.directories[idx]
-    compress = 100
-    return process_image(image, self.in_size, self.out_size, compress, self.color)
+    if not self.color: raise NotImplementedError("Grayscale images not implemented in UpscaleDataset.")
+    cv_image = cv2.imread(image)
+    target_image = self.image_processing.get_target_image(cv_image, self.out_size)
+    input_image = self.image_processing.get_input_image(self.in_size, target_image)
+    return input_image, target_image
 
 def test_patches():
-  data = UpscaleDataset(filepath="Datasets/Wallpapers/Train", color=True)
+  data = UpscaleDataset(filepath="Datasets/Cartoon/Train", color=True)
   load = DataLoader(data, batch_size=16, shuffle=True)
 
   x = torch.randn(1, 32, 64, 64)
@@ -253,6 +245,6 @@ def filter_images():
     if image.shape[0] < 128 or image.shape[1] < 128:
       os.remove(path)
 
-# test_patches()
+test_patches()
 # segment_images()
 # filter_images()
