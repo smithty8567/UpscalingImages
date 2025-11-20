@@ -67,28 +67,27 @@ class UpscaleBlock(nn.Module):
     return self.block(x)
 
 class RRDBNet(nn.Module):
-  def __init__(self, num_blocks=23):
+  def __init__(self, num_blocks=23, channels=64, growth=32):
     super().__init__()
 
     self.head = nn.Sequential(
-      nn.Conv2d(1, 64, kernel_size=9, padding=4),
+      nn.Conv2d(3, channels, kernel_size=9, padding=4),
       nn.PReLU()
     )
 
     self.res_blocks = nn.Sequential(
-      *[RRDB(64, 32) for _ in range(num_blocks)]
+      *[RRDB(channels, growth) for _ in range(num_blocks)]
     )
 
     self.trunk_conv = nn.Sequential(
-      nn.Conv2d(64, 64, kernel_size=3, padding=1)
+      nn.Conv2d(channels, channels, kernel_size=3, padding=1)
     )
 
     self.upscale = nn.Sequential(
-      UpscaleBlock(64, scale=2),
-      UpscaleBlock(64, scale=2)
+      UpscaleBlock(channels, scale=2),
     )
 
-    self.final = nn.Conv2d(64, 1, kernel_size=9, padding=4)
+    self.final = nn.Conv2d(channels, 3, kernel_size=9, padding=4)
 
     # Initialize final layer with zeros
     self.final.weight.data.zero_()
@@ -104,11 +103,12 @@ class RRDBNet(nn.Module):
     return x
 
   @staticmethod
-  def save(model, path, epoch):
+  def save(model, path, epoch, iter):
     try:
       torch.save({
         'state_dict': model.state_dict(),
-        'epoch': epoch
+        'epoch': epoch,
+        'iter': iter
       }, path + '.tmp')
       os.replace(path + '.tmp', path)
     except Exception as e:
@@ -121,16 +121,16 @@ class RRDBNet(nn.Module):
       model = RRDBNet()
       model.load_state_dict(data['state_dict'])
       print(f"Loaded from checkpoint at epoch {data['epoch'] + 1}")
-      return model, data['epoch']
+      return model, data['epoch'], data['iter']
     except Exception as e:
       print(f"Error loading checkpoint: {e}")
       print("Creating new model...")
-      return RRDBNet(), 0
+      return RRDBNet(), 0, 0
 
 def train():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-  dataset = UpscaleDataset(filepath="Datasets/Manga/Train", in_size=64, out_size=256)
-  model, epoch = RRDBNet.load("Models/sr_rrdb.pt")
+  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=128, color=True)
+  model, epoch, iter = RRDBNet.load("Models/sr_rrdb_wallpapers.pt")
   model = model.to(device)
   loader = DataLoader(dataset, batch_size=16, shuffle=True)
   loss_fn = nn.L1Loss()
@@ -138,13 +138,13 @@ def train():
   adam = optim.Adam(model.parameters(), lr=0.00002)
   total_loss = 0
   n_losses = 0
-  batch = 0
   last_loss = "?"
   last_saved = "Never"
 
   for i in range(epoch, 10000):
     prog_bar = tqdm(loader)
     for j, (batch_input, batch_target) in enumerate(prog_bar):
+      iter += 1
       batch_input = batch_input.to(device)
       batch_target = batch_target.to(device)
 
@@ -160,22 +160,21 @@ def train():
 
       total_loss += loss_val.item()
       n_losses += 1
-      batch += 1
 
-      if batch % 200 == 0:
+      if iter % 50 == 0:
         last_loss = total_loss / n_losses
         prog_bar.set_postfix(loss=last_loss, saved=last_saved)
         total_loss = 0
         n_losses = 0
       
-      if batch % 500 == 0:
+      if iter % 100 == 0:
         last_saved = f"Epoch {i+1} batch {j}"
         prog_bar.set_postfix(loss=last_loss, saved=last_saved)
-        RRDBNet.save(model, "Models/sr_rrdb.pt", i)
+        RRDBNet.save(model, "Models/sr_rrdb_wallpapers.pt", i, iter)
 
 def test():
-  model = RRDBNet.load("Models/sr_rrdb.pt")[0]
-  test_model(model, None, 64, 256)
+  model = RRDBNet.load("Models/sr_rrdb_wallpapers.pt")[0]
+  test_model(model, None, 128, 512, True)
 
 # train()
 # test()

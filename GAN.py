@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import SRResNet as SR
 import ESRGAN as ES
 import torchvision
+import lpips
 
 class Generator(nn.Module):
   def __init__(self, num_blocks=23):
@@ -63,7 +64,7 @@ class Discriminator(nn.Module):
     super().__init__()
 
     self.conv1 = nn.Sequential(
-      nn.Conv2d(1, 64, 9, 1, 4), # 256x256
+      nn.Conv2d(3, 64, 3, 1, 1), # 256x256
       nn.LeakyReLU(0.2, inplace=True)
     )
 
@@ -96,13 +97,13 @@ class Discriminator(nn.Module):
       nn.BatchNorm2d(512),
       nn.LeakyReLU(0.2, inplace=True),
 
-      nn.Conv2d(512, 1024, 3, 1, 1),
-      nn.BatchNorm2d(1024),
-      nn.LeakyReLU(0.2, inplace=True),
+      # nn.Conv2d(512, 1024, 3, 1, 1),
+      # nn.BatchNorm2d(1024),
+      # nn.LeakyReLU(0.2, inplace=True),
 
-      nn.Conv2d(1024, 1024, 3, 2, 1), # 8x8
-      nn.BatchNorm2d(1024),
-      nn.LeakyReLU(0.2, inplace=True)
+      # nn.Conv2d(1024, 1024, 3, 2, 1), # 8x8
+      # nn.BatchNorm2d(1024),
+      # nn.LeakyReLU(0.2, inplace=True)
     )
 
     # Adaptive average pooling is not needed for input size 128x128
@@ -110,7 +111,7 @@ class Discriminator(nn.Module):
 
     self.linear = nn.Sequential(
       nn.Flatten(),
-      nn.Linear(1024 * 8 * 8, 1024),
+      nn.Linear(512 * 8 * 8, 1024),
       nn.LeakyReLU(0.2, inplace=True),
       nn.Linear(1024, 1)
     )
@@ -147,9 +148,14 @@ class Discriminator(nn.Module):
       return Discriminator(), 0, 0
 
 class PerceptualLoss(nn.Module):
-  def __init__(self):
+  def __init__(self, device):
     super().__init__()
     
+    # These numbers come from the official VGG19 documentation
+    # https://docs.pytorch.org/vision/main/models/generated/torchvision.models.vgg19.html
+    self.mean = torch.tensor([0.485, 0.456, 0.406]).view(1,3,1,1).to(device)
+    self.std = torch.tensor([0.229, 0.224, 0.225]).view(1,3,1,1).to(device)
+
     # Stop at the 4th convolution before the 5th maxpool
     i = 5 # Max pool
     j = 4 # Conv
@@ -179,7 +185,7 @@ class PerceptualLoss(nn.Module):
 
     # Check if conditions were satisfied
     assert maxpool_counter == i - 1 and conv_counter == j, "One or both of i=%d and j=%d are not valid choices for the VGG19!" % (i, j)
-
+    
     # Truncate to the jth convolution (skip activation) before the ith maxpool layer
     self.truncated_vgg19 = nn.Sequential(*features[:truncate_at])
 
@@ -188,6 +194,10 @@ class PerceptualLoss(nn.Module):
       # Repeat the grayscale image 3 times (B, C, H, W)
       x = x.repeat(1, 3, 1, 1)
       y = y.repeat(1, 3, 1, 1)
+
+    # Normalize to ImageNet mean and std
+    x = (x - self.mean) / self.std
+    y = (y - self.mean) / self.std
 
     x = self.truncated_vgg19(x)
     y = self.truncated_vgg19(y)
@@ -219,12 +229,12 @@ def train():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   
   # Data
-  dataset = UpscaleDataset(filepath="Datasets/Manga/Train", in_size=64, out_size=256, color=False)
-  loader = DataLoader(dataset, batch_size=8, shuffle=True)
+  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=128, color=True)
+  loader = DataLoader(dataset, batch_size=10, shuffle=True)
   
   # Models
-  gen, epoch, iter = Generator.load("Models/sr_gen_4.pt", "Models/sr_rrdb.pt")
-  dis = Discriminator.load("Models/sr_dis_4.pt")[0]
+  gen, epoch, iter = Generator.load("Models/sr_gen_wallpapers_3.pt", "Models/sr_rrdb_wallpapers.pt")
+  dis = Discriminator.load("Models/sr_dis_wallpapers_3.pt")[0]
   gen = gen.to(device)
   dis = dis.to(device)
   
@@ -234,8 +244,9 @@ def train():
   
   # Losses
   l1_loss_fn = nn.L1Loss()
-  perceptual_loss_fn = PerceptualLoss()
-  perceptual_loss_fn.to(device)
+  # perceptual_loss_fn = PerceptualLoss(device=device)
+  perceptual_loss_fn = lpips.LPIPS(net='vgg')
+  if device.type == 'cuda': perceptual_loss_fn.cuda()
   
   # Training parameters
   gen_total_loss = 0
@@ -255,7 +266,7 @@ def train():
       batch_input = batch_input.to(device)
       batch_target = batch_target.to(device)
       
-      if (iter % 2) != 0:
+      if (iter % 3) != 0:
         # 1) Train Discriminator
         dis_opt.zero_grad()
         sr = gen(batch_input).detach()
@@ -297,8 +308,8 @@ def train():
         )
 
         l1_loss = l1_loss_fn(sr, batch_target)
-        perceptual_loss = perceptual_loss_fn(sr, batch_target)
-        gen_loss = perceptual_loss + 0.005 * l1_loss + 0.001 * adv_loss
+        perceptual_loss = perceptual_loss_fn(sr * 2 - 1, batch_target * 2 - 1).mean()
+        gen_loss = perceptual_loss + 0.01 * l1_loss + 0.01 * adv_loss
 
         gen_loss.backward()
         gen_opt.step()
@@ -315,14 +326,14 @@ def train():
         prc_loss, prc_total_loss = prc_total_loss / 100, 0
         l1_loss, l1_total_loss = l1_total_loss / 100, 0
         prog_bar.set_postfix(gen_loss=gen_loss, dis_loss=dis_loss, adv_loss=adv_loss, prc_loss=prc_loss, l1_loss=l1_loss)
-        Generator.save(gen, "Models/sr_gen_4.pt", i, iter)
-        Discriminator.save(dis, "Models/sr_dis_4.pt", i, iter)
+        Generator.save(gen, "Models/sr_gen_wallpapers_3.pt", i, iter)
+        Discriminator.save(dis, "Models/sr_dis_wallpapers_3.pt", i, iter)
 
 def test():
-  model_a = Generator.load("Models/sr_gen_4.pt")[0]
-  model_b = Generator.load("", "Models/sr_rrdb.pt")[0]
+  model_a = Generator.load("Models/sr_gen_wallpapers_3.pt")[0]
+  model_b = Generator.load("", "Models/sr_rrdb_wallpapers.pt")[0]
   # model_c = interpolate_models(model_a, model_b, 0.3)
-  test_model(model_a, model_b, 64, 256)
+  test_model(model_a, model_b, 64, 256, True)
 
 # train()
 test()

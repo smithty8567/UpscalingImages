@@ -48,22 +48,58 @@ def to_image(patched_batch, patch_size):
   # (B, C, H, W)
   return image_batch
 
+def np_to_tensor(image):
+  return torch.from_numpy(image / 255).permute(2, 0, 1).float()
+
+def tensor_to_np(image):
+  return (image.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
+
 def process_image(path, process_size, out_size, compress, color):
   interpolation = random.choice([cv2.INTER_NEAREST, cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA])
   if color:
+    # return process_color_image(path, process_size, out_size)
+
     # Loads image
     image = cv2.imread(path)#[100:400, 100:400]
 
-    resized = cv2.resize(image, (process_size, process_size), interpolation=interpolation)
-    Y, Cr, Cb = cv2.split(cv2.cvtColor(resized, cv2.COLOR_BGR2YCR_CB))
+    # Random resize
+    # scale = random.uniform(0.9, 1.1)
+    # new_width = int(image.shape[1] * scale)
+    # new_height = int(image.shape[0] * scale)
+    # new_width = max(new_width, out_size)
+    # new_height = max(new_height, out_size)
+    # image = cv2.resize(image, (new_width, new_height), interpolation=interpolation)
 
-    _, encode = cv2.imencode('.jpg', Y, [cv2.IMWRITE_JPEG_QUALITY, compress])
-    y_decode = cv2.imdecode(encode, -1)
-    merge = cv2.merge([y_decode, Cr, Cb])
-    processed = cv2.cvtColor(merge, cv2.COLOR_YCR_CB2RGB) / 255
+    random_out_size = out_size
+    # random_out_size = int(out_size * random.uniform(1.0, 4.0))
+    # random_out_size = min(random_out_size, image.shape[0], image.shape[1])
+
+    # Random out_size x out_size image
+    x = random.randint(0, image.shape[0] - random_out_size)
+    y = random.randint(0, image.shape[1] - random_out_size)
+    image = image[x:x+random_out_size, y:y+random_out_size]
+    # image = cv2.resize(image, (out_size, out_size), interpolation=interpolation)
+
+    # resized = cv2.resize(image, (process_size, process_size), interpolation=interpolation)
+    # Y, Cr, Cb = cv2.split(cv2.cvtColor(resized, cv2.COLOR_BGR2YCR_CB))
+    # _, encode = cv2.imencode('.jpg', Y, [cv2.IMWRITE_JPEG_QUALITY, compress])
+    # y_decode = cv2.imdecode(encode, -1)
+    # merge = cv2.merge([y_decode, Cr, Cb])
+    # processed = cv2.cvtColor(merge, cv2.COLOR_YCR_CB2RGB) / 255
+
+    processed_image = image
+    
+    # Random blur
+    # if random.random() < 0.5:
+    #   ksize = random.choice([3,5])
+    #   sigma_x = random.uniform(0.1, 3.0)
+    #   sigma_y = random.uniform(0.1, 3.0)
+    #   processed_image = cv2.GaussianBlur(processed_image, (ksize, ksize), sigmaX=sigma_x, sigmaY=sigma_y)
 
     # Resizes image and permutes image to (Color, Height, Width) dtype = float32
-    processed_image = torch.from_numpy(processed).float()
+    processed_image = cv2.resize(processed_image, (process_size, process_size), interpolation=interpolation)
+    process_image = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
+    processed_image = torch.from_numpy(process_image).float() / 255
     processed_image = processed_image.permute(2, 0, 1)
     processed_image = processed_image.contiguous()
 
@@ -140,7 +176,7 @@ class UpscaleDataset(Dataset):
     self.in_size = in_size
     self.out_size = out_size
     self.color = color
-
+    
   def __len__(self):
     return len(self.directories)
 
@@ -150,8 +186,8 @@ class UpscaleDataset(Dataset):
     return process_image(image, self.in_size, self.out_size, compress, self.color)
 
 def test_patches():
-  data = UpscaleDataset(color=False, samples = 100)
-  load = DataLoader(data, batch_size=4, shuffle=True)
+  data = UpscaleDataset(filepath="Datasets/Wallpapers/Train", color=True)
+  load = DataLoader(data, batch_size=16, shuffle=True)
 
   x = torch.randn(1, 32, 64, 64)
   y = to_image(to_patches(x, 8), 8)
@@ -178,4 +214,45 @@ def test_patches():
     plt.waitforbuttonpress()
     plt.show()
 
+def segment_images():
+  from_path = 'Datasets/Wallpapers/Train2'
+  to_path = 'Datasets/Wallpapers/Train3'
+  dirs = generate_directory_list(from_path, None)
+
+  if not os.path.exists(to_path):
+    os.makedirs(to_path)
+
+  for path in tqdm.tqdm(dirs):
+    file_name = path.split('\\')[-1]
+    image = cv2.imread(path)
+    
+    # Cut in half
+    image = cv2.resize(image, (image.shape[1] // 2, image.shape[0] // 2))
+    
+    # Divide into four pieces
+    middle_x = image.shape[1] // 2
+    middle_y = image.shape[0] // 2
+    tr = image[:middle_y, :middle_x]
+    tl = image[:middle_y, middle_x:]
+    br = image[middle_y:, :middle_x]
+    bl = image[middle_y:, middle_x:]
+
+    # Save images
+    cv2.imwrite(f'{to_path}/tr_{file_name}', tr)
+    cv2.imwrite(f'{to_path}/tl_{file_name}', tl)
+    cv2.imwrite(f'{to_path}/br_{file_name}', br)
+    cv2.imwrite(f'{to_path}/bl_{file_name}', bl)
+
+def filter_images():
+  # Remove all images with height/width < 128
+  path = 'Datasets/Wallpapers/Train3'
+  dirs = generate_directory_list(path, None)
+
+  for path in tqdm.tqdm(dirs):
+    image = cv2.imread(path)
+    if image.shape[0] < 128 or image.shape[1] < 128:
+      os.remove(path)
+
 # test_patches()
+# segment_images()
+# filter_images()
