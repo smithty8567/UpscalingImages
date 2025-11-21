@@ -21,38 +21,48 @@ class CharbonnierLoss(nn.Module):
     return torch.mean(torch.sqrt((pred - target)**2 + self.eps**2))
 
 class DenseBlock(nn.Module):
-  def __init__(self, channels=64, growth=32):
+  def __init__(self, channels=64, growth=32, beta=0.2):
     super().__init__()
 
+    self.beta = beta
     self.convs = nn.ModuleList([
       nn.Conv2d(channels + i * growth, growth, 3, 1, 1)
-      for i in range(5)
+      for i in range(4)
     ])
 
     self.activation = nn.LeakyReLU(0.2, inplace=True)
-    self.final_conv = nn.Conv2d(channels + 5 * growth, channels, 1, 1, 0)
+    self.final_conv = nn.Conv2d(channels + 4 * growth, channels, 1, 1, 0)
 
   def forward(self, x):
     features = [x]
-    for conv in self.convs:
+    for i, conv in enumerate(self.convs):
       out = self.activation(conv(torch.cat(features, dim=1)))
+      if i % 2 == 0:
+        skip_connection = out
+      else:
+        out = skip_connection + out * self.beta
       features.append(out)
     out = torch.cat(features, dim=1)
-    out = self.final_conv(out) * 0.2
-    return out + x
+    out = self.final_conv(out)
+    return out
 
 class RRDB(nn.Module):
-  def __init__(self, channels=64, growth=32):
+  def __init__(self, channels=64, growth=32, beta=0.2):
     super().__init__()
-    self.DB1 = DenseBlock(channels, growth)
-    self.DB2 = DenseBlock(channels, growth)
-    self.DB3 = DenseBlock(channels, growth)
+    self.beta = beta
+    self.DB1 = DenseBlock(channels, growth, beta)
+    self.DB2 = DenseBlock(channels, growth, beta)
+    self.DB3 = DenseBlock(channels, growth, beta)
+    self.noise_factor_1 = nn.Parameter(torch.tensor(0.0))
+    self.noise_factor_2 = nn.Parameter(torch.tensor(0.0))
+    self.noise_factor_3 = nn.Parameter(torch.tensor(0.0))
 
   def forward(self, x):
-    out = self.DB1(x)
-    out = self.DB2(out)
-    out = self.DB3(out)
-    return out * 0.2 + x
+    out = x
+    out = out + self.DB1(out) * self.beta + self.noise_factor_1 * torch.randn_like(out)
+    out = out + self.DB2(out) * self.beta + self.noise_factor_2 * torch.randn_like(out)
+    out = out + self.DB3(out) * self.beta + self.noise_factor_3 * torch.randn_like(out)
+    return out
 
 class UpscaleBlock(nn.Module):
   def __init__(self, channels=64, scale=2):
@@ -101,6 +111,13 @@ class RRDBNet(nn.Module):
     x = self.upscale(x)
     x = self.final(x)
     return x
+  
+  def forward_features(self, x):
+    x_head = self.head(x)
+    x_res = self.res_blocks(x_head)
+    x_trunk = self.trunk_conv(x_res)
+    x = x_head + x_trunk
+    return x
 
   @staticmethod
   def save(model, path, epoch, iter):
@@ -127,15 +144,79 @@ class RRDBNet(nn.Module):
       print("Creating new model...")
       return RRDBNet(), 0, 0
 
+class RRDBNet16x(nn.Module):
+  """
+  RRDBNet variant for 16x upscaling.
+  This module extends the RRDBNet by adding an additional UpscaleBlock.
+  """
+  def __init__(self):
+    super().__init__()
+    self.rrdbnet = RRDBNet()
+    self.upscale = UpscaleBlock()
+
+    self.upscale = nn.Sequential(
+      UpscaleBlock(64, scale=2),
+      UpscaleBlock(64, scale=2)
+    )
+
+    self.final = nn.Conv2d(64, 3, kernel_size=9, padding=4)
+
+    # Initialize final layer with zeros
+    self.final.weight.data.zero_()
+    self.final.bias.data.zero_()
+
+  def forward(self, x):
+    x = self.rrdbnet.forward_features(x)
+    x = self.upscale(x)
+    x = self.final(x)
+    return x
+  
+  @staticmethod
+  def save(model, path, epoch, iter):
+    try:
+      torch.save({
+        'state_dict': model.state_dict(),
+        'epoch': epoch,
+        'iter': iter
+      }, path + '.tmp')
+      os.replace(path + '.tmp', path)
+    except Exception as e:
+      print(f"Error saving checkpoint: {e}")
+
+  @staticmethod
+  def load(path, rrdbnet_path=None):
+    try:
+      model = RRDBNet16x()
+      data = torch.load(path, weights_only=True, map_location='cpu')
+      model.load_state_dict(data['state_dict'])
+      print(f"Loaded from checkpoint at epoch {data['epoch'] + 1}")
+      return model, data['epoch'], data['iter']
+    except Exception as e:
+      if rrdbnet_path is None: raise 'Error loading checkpoint and no RRDBNet path provided'
+      model = RRDBNet16x()
+      rrdbnet = RRDBNet.load(rrdbnet_path)[0]
+      model.rrdbnet = rrdbnet
+      print(f"Error loading checkpoint: {e}")
+      print("Creating new model...")
+      return model, 0, 0
+
 def train():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=128, color=True)
-  model, epoch, iter = RRDBNet.load("Models/sr_rrdb_wallpapers.pt")
+  
+  # Models
+  # model, epoch, iter = RRDBNet.load("Models/sr_rrdb_wallpapers_2.pt")
+  # model = model.to(device)
+  model, epoch, iter = RRDBNet16x.load("Models/sr_rrdb16x_wallpapers_2.pt", "Models/sr_rrdb_wallpapers_2.pt")
   model = model.to(device)
+
+  # Data
+  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=256, color=True)
   loader = DataLoader(dataset, batch_size=16, shuffle=True)
+  
+  # Loss
   loss_fn = nn.L1Loss()
   scaler = torch.amp.GradScaler('cuda')
-  adam = optim.Adam(model.parameters(), lr=0.00002)
+  adam = optim.Adam(model.parameters(), lr=0.0002)
   total_loss = 0
   n_losses = 0
   last_loss = "?"
@@ -170,11 +251,13 @@ def train():
       if iter % 100 == 0:
         last_saved = f"Epoch {i+1} batch {j}"
         prog_bar.set_postfix(loss=last_loss, saved=last_saved)
-        RRDBNet.save(model, "Models/sr_rrdb_wallpapers.pt", i, iter)
+        RRDBNet16x.save(model, "Models/sr_rrdb16x_wallpapers_2.pt", i, iter)
+        # RRDBNet.save(model, "Models/sr_rrdb_wallpapers_2.pt", i, iter)
 
 def test():
-  model = RRDBNet.load("Models/sr_rrdb_wallpapers.pt")[0]
-  test_model(model, None, 128, 512, True)
+  # model = RRDBNet.load("Models/sr_rrdb_wallpapers_2.pt")[0]
+  model = RRDBNet16x.load("Models/sr_rrdb16x_wallpapers_2.pt")[0]
+  test_model(model, None, 64, 256, True)
 
 # train()
-# test()
+test()

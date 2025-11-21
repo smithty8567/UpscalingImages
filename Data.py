@@ -236,13 +236,13 @@ def segment_images():
     cv2.imwrite(f'{to_path}/bl_{file_name}', bl)
 
 def filter_images():
-  # Remove all images with height/width < 128
+  # Remove all images with height/width < 256
   path = 'Datasets/Wallpapers/Train3'
   dirs = generate_directory_list(path, None)
 
   for path in tqdm.tqdm(dirs):
     image = cv2.imread(path)
-    if image.shape[0] < 128 or image.shape[1] < 128:
+    if image.shape[0] < 256 or image.shape[1] < 256:
       os.remove(path)
 
 # test_patches()

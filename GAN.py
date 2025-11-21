@@ -230,11 +230,11 @@ def train():
   
   # Data
   dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=128, color=True)
-  loader = DataLoader(dataset, batch_size=10, shuffle=True)
+  loader = DataLoader(dataset, batch_size=7, shuffle=True)
   
   # Models
-  gen, epoch, iter = Generator.load("Models/sr_gen_wallpapers_4.pt", "Models/sr_rrdb_wallpapers.pt")
-  dis = Discriminator.load("Models/sr_dis_wallpapers_4.pt")[0]
+  gen, epoch, iter = Generator.load("Models/sr_gen_wallpapers_5.pt", "Models/sr_rrdb_wallpapers_2.pt")
+  dis = Discriminator.load("Models/sr_dis_wallpapers_5.pt")[0]
   gen = gen.to(device)
   dis = dis.to(device)
   
@@ -269,7 +269,11 @@ def train():
       if (iter % 3) != 0:
         # 1) Train Discriminator
         dis_opt.zero_grad()
-        sr = gen(batch_input).detach()
+        sr = gen(batch_input)#.detach()
+
+        # Downscale and re-upscale real images for better stability
+        sr = F.interpolate(sr, scale_factor=0.5, mode='bicubic')
+        sr = gen(sr).detach()
         
         real_logits = dis(batch_target)
         fake_logits = dis(sr)
@@ -294,6 +298,10 @@ def train():
         # 2) Train Generator
         gen_opt.zero_grad()
         sr = gen(batch_input)
+
+        # Downscale and re-upscale real images for better stability
+        sr = F.interpolate(sr, scale_factor=0.5, mode='bicubic')
+        sr = gen(sr)
 
         real_logits = dis(batch_target)
         fake_logits = dis(sr)
@@ -326,14 +334,14 @@ def train():
         prc_loss, prc_total_loss = prc_total_loss / 100, 0
         l1_loss, l1_total_loss = l1_total_loss / 100, 0
         prog_bar.set_postfix(gen_loss=gen_loss, dis_loss=dis_loss, adv_loss=adv_loss, prc_loss=prc_loss, l1_loss=l1_loss)
-        Generator.save(gen, "Models/sr_gen_wallpapers_4.pt", i, iter)
-        Discriminator.save(dis, "Models/sr_dis_wallpapers_4.pt", i, iter)
+        Generator.save(gen, "Models/sr_gen_wallpapers_5.pt", i, iter)
+        Discriminator.save(dis, "Models/sr_dis_wallpapers_5.pt", i, iter)
 
 def test():
-  model_a = Generator.load("Models/sr_gen_wallpapers_4.pt")[0]
-  model_b = Generator.load("", "Models/sr_rrdb_wallpapers.pt")[0]
+  model_a = Generator.load("Models/sr_gen_wallpapers_5.pt")[0]
+  model_b = Generator.load("", "Models/sr_rrdb_wallpapers_2.pt")[0]
   # model_c = interpolate_models(model_a, model_b, 0.3)
-  test_model(model_a, model_b, 64, 128, True)
+  test_model(model_a, model_b, 64, 256, True)
 
 # train()
 test()

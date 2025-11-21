@@ -11,7 +11,7 @@ def test_model(model, old_model=None, in_size=64, out_size=128, color=False):
   model = model.to(device)
   dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=in_size, out_size=out_size, color=color)
   loader = DataLoader(dataset, batch_size=1, shuffle=True)
-  model_name = type(model).__name__
+  model_name = "GAN"
 
   def bicubic(x):
     return torch.nn.functional.interpolate(x, scale_factor=2, mode='bicubic', align_corners=False)
@@ -21,7 +21,7 @@ def test_model(model, old_model=None, in_size=64, out_size=128, color=False):
     old_model_name = "Bicubic"
   else:
     old_model = old_model.to(device)
-    old_model_name = type(old_model).__name__
+    old_model_name = "PSNR"
 
   for batch_input, batch_target in loader:
     batch_input = batch_input.to(device)
