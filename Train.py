@@ -10,12 +10,12 @@ import torch
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-def train(epochs=1000, lr=0.0002, save_every=1000, loss_every=100, batch_size=32):
+def train(epochs=1000, lr=0.0001, save_every=1000, loss_every=100, batch_size=32):
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   print(f"Device: {device}")
 
   dataset = UpscaleDataset()
-  model, epoch = Upscaling.load("model.pt")
+  model, epoch = Upscaling.load("Models/manga_model_2.pt")
   model = model.to(device)
   loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
   loss_fn = nn.MSELoss()
@@ -35,6 +35,7 @@ def train(epochs=1000, lr=0.0002, save_every=1000, loss_every=100, batch_size=32
       total_loss += loss_val.item()
       n_losses += 1
       loss_val.backward()
+      torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
       adam.step()
       batch += 1
 
@@ -45,6 +46,6 @@ def train(epochs=1000, lr=0.0002, save_every=1000, loss_every=100, batch_size=32
 
       if batch % save_every == 0:
         print(f"Saving model at epoch {i+1} on batch {j}/{len(loader)}")
-        Upscaling.save(model, "model.pt", i)
+        Upscaling.save(model, "Models/manga_model_2.pt", i)
         
-train()
+# train()
