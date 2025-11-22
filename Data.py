@@ -104,7 +104,7 @@ class ImageProcessing:
 
 class UpscaleDataset(Dataset):
   """
-    Dataset class for the Upscaling Image Transformer.
+    Dataset class for the ESRGAN.
 
     Args:
       filepath (string): Path to images.
@@ -118,11 +118,10 @@ class UpscaleDataset(Dataset):
       __getitem__ (int): processed image and original image from index.
     """
 
-  def __init__(self, filepath, in_size = 64, out_size = 128, color = False, samples=None):
+  def __init__(self, filepath, in_size = 64, out_size = 128, samples=None):
     self.directories = generate_directory_list(filepath, samples)
     self.in_size = in_size
     self.out_size = out_size
-    self.color = color
     self.image_processing = ImageProcessing()
     
   def __len__(self):
@@ -130,7 +129,6 @@ class UpscaleDataset(Dataset):
 
   def __getitem__(self, idx):
     image = self.directories[idx]
-    if not self.color: raise NotImplementedError("Grayscale images not implemented in UpscaleDataset.")
     cv_image = cv2.imread(image)
     target_image = self.image_processing.get_target_image(cv_image, self.out_size)
     input_image = self.image_processing.get_input_image(self.in_size, target_image)

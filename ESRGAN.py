@@ -12,6 +12,7 @@ import RRDBNet as ES
 import torchvision
 import lpips
 
+# Initialize the generator with a pretrained RRDB network
 class Generator(nn.Module):
   def __init__(self, num_blocks=23):
     super().__init__()
@@ -219,7 +220,7 @@ def train():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   
   # Data
-  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=256, color=True)
+  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=256)
   loader = DataLoader(dataset, batch_size=10, shuffle=True)
   
   # Models
@@ -322,7 +323,6 @@ def train():
 def test():
   model_a = Generator.load("Models/sr_gen_wallpapers_8.pt")[0]
   model_b = Generator.load("", "Models/sr_rrdb16x_wallpapers_2.pt")[0]
-  # model_c = interpolate_models(model_a, model_b, 0.3)
   test_model(model_a, model_b, 64, 256, True)
 
 # train()

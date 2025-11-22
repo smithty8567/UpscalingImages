@@ -34,6 +34,15 @@ class DenseBlock(nn.Module):
     return out
 
 class RRDB(nn.Module):
+  """
+      Residual in Residual Dense Block class for the ESRGAN.
+
+      Args:
+        channels (int): Starting Channels for Dense Blocks.
+        growth (int): Growth of the Convolutions in Dense Blocks.
+        beta (float): Negative slope for LeakyReLU.
+
+  """
   def __init__(self, channels=64, growth=32, beta=0.2):
     super().__init__()
     self.beta = beta
@@ -197,7 +206,7 @@ def train():
   model = model.to(device)
 
   # Data
-  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=256, color=True)
+  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=256)
   loader = DataLoader(dataset, batch_size=16, shuffle=True)
   
   # Loss
