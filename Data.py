@@ -8,47 +8,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from torchvision.io import encode_jpeg, decode_jpeg
 
-def to_patches(image_batch, patch_size):
-  # Image Batch Shape: (Batch, Color Channels, Height, Width)
-  # patched_batch Shape: (Batch, (height * width)/patch_size^2, color *  patch_size^2)
-  batch = image_batch.shape[0]
-  color = image_batch.shape[1]
-  height, width = image_batch.shape[-2:]
-
-  # (B, C, H, W)
-  patched_batch = image_batch.view(batch, color, height // patch_size, patch_size, width // patch_size, patch_size)
-  
-  # (B, C, H/P, P, W/P, P)
-  patched_batch = patched_batch.permute(0, 2, 4, 1, 3, 5)
-  
-  # (B, H/P, W/P, C, P, P)
-  patched_batch = patched_batch.contiguous().view(batch, height // patch_size * width // patch_size,
-                            color * patch_size ** 2)
-  # (B, H/P*W/P, C*P*P)
-  return patched_batch
-
-def to_image(patched_batch, patch_size):
-  # patched_batch Shape: (Batch, (height * width)/patch_size^2, color *  patch_size^2)
-  # Image Batch Shape: (Batch, Color Channels, Height, Width)
-  batch = patched_batch.shape[0]
-  color = patched_batch.shape[2] // (patch_size * patch_size)
-  height = patched_batch.shape[1] * (patch_size * patch_size)
-  width = patched_batch.shape[1] * (patch_size * patch_size)
-  height = int(height ** 0.5)
-  width = int(width ** 0.5)
-
-  # (B, H/P, W/P, C*P*P)
-  image_batch = patched_batch.view(batch, height // patch_size, width // patch_size, color, patch_size, patch_size)
-  
-  # (B, H/P, W/P, C, P, P)
-  image_batch = image_batch.permute(0, 3, 1, 4, 2, 5)
-  
-  # (B, C, H/P, P, W/P, P)
-  image_batch = image_batch.contiguous().view(batch, color, height, width)
-  
-  # (B, C, H, W)
-  return image_batch
-
 def generate_directory_list(filepath, samples):
   """Creates array of image directories."""
   directories = []
@@ -145,7 +104,7 @@ class ImageProcessing:
 
 class UpscaleDataset(Dataset):
   """
-    Dataset class for the Upscaling Image Transformer.
+    Dataset class for the ESRGAN.
 
     Args:
       filepath (string): Path to images.
@@ -159,11 +118,10 @@ class UpscaleDataset(Dataset):
       __getitem__ (int): processed image and original image from index.
     """
 
-  def __init__(self, filepath = 'Datasets/Manga/Train', in_size = 64, out_size = 128, color = False, samples=None):
+  def __init__(self, filepath, in_size = 64, out_size = 128, samples=None):
     self.directories = generate_directory_list(filepath, samples)
     self.in_size = in_size
     self.out_size = out_size
-    self.color = color
     self.image_processing = ImageProcessing()
     
   def __len__(self):
@@ -171,40 +129,10 @@ class UpscaleDataset(Dataset):
 
   def __getitem__(self, idx):
     image = self.directories[idx]
-    if not self.color: raise NotImplementedError("Grayscale images not implemented in UpscaleDataset.")
     cv_image = cv2.imread(image)
     target_image = self.image_processing.get_target_image(cv_image, self.out_size)
     input_image = self.image_processing.get_input_image(self.in_size, target_image)
     return input_image, target_image
-
-def test_patches():
-  data = UpscaleDataset(filepath="Datasets/Cartoon/Train", color=True)
-  load = DataLoader(data, batch_size=16, shuffle=True)
-
-  x = torch.randn(1, 32, 64, 64)
-  y = to_image(to_patches(x, 8), 8)
-  print("Error:", (x - y).abs().max().item())  # should be ~0
-
-  for batch, target in load:
-
-    patched = to_patches(batch, 8)
-    print(f'Batch Shape: {batch.shape}')
-    print(f'Patched Shape: {patched.shape}')
-
-    images = to_image(patched, 8)
-    print(f'Image Shape: {images.shape} \n')
-
-    # plt.imshow(batch[0].permute(1, 2, 0), cmap='gray')
-    # plt.show()
-
-    fig, ax = plt.subplots(1, 2)
-
-    ax[0].imshow(images[0].permute(1, 2, 0), cmap='gray')
-    ax[1].imshow(target[0].permute(1, 2, 0), cmap='gray')
-
-    # plt.imshow(images[0].permute(1, 2, 0), cmap='gray')
-    plt.waitforbuttonpress()
-    plt.show()
 
 def segment_images():
   from_path = 'Datasets/Wallpapers/Train2'
@@ -245,6 +173,5 @@ def filter_images():
     if image.shape[0] < 256 or image.shape[1] < 256:
       os.remove(path)
 
-# test_patches()
 # segment_images()
 # filter_images()

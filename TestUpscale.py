@@ -1,15 +1,14 @@
 from torch.utils.data import DataLoader
-from UpscalingImages import Upscaling
 from Data import UpscaleDataset
 import torch
 import matplotlib.pyplot as plt
 import os
 import cv2
 
-def test_model(model, old_model=None, in_size=64, out_size=128, color=False):
+def test_model(model, old_model=None, in_size=64, out_size=128):
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   model = model.to(device)
-  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Test3", in_size=in_size, out_size=out_size, color=color)
+  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Test3", in_size=in_size, out_size=out_size)
   loader = DataLoader(dataset, batch_size=1, shuffle=True)
   model_name = "GAN"
 
