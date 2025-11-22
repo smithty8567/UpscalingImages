@@ -1,122 +1,115 @@
-import os
-import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch import optim
 from tqdm import tqdm
 from Data import UpscaleDataset
 from TestUpscale import test_model
+import os
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.nn.utils.spectral_norm as SN
+import RRDBNet as ES
+import torchvision
+import lpips
 
-class CharbonnierLoss(nn.Module):
-  """A differentiable version of L1 loss (Mean Absolute Error)
-  that behaves like L2 loss when targets are close to zero.
-  This makes it more robust to outliers than L2 loss while
-  preserving differentiability at zero. The larger epsilon is,
-  the less gradients near zero will matter (smoother images)."""
-  def __init__(self, eps=1e-3):
-    super().__init__()
-    self.eps = eps
-
-  def forward(self, pred, target):
-    return torch.mean(torch.sqrt((pred - target)**2 + self.eps**2))
-
-class DenseBlock(nn.Module):
-  def __init__(self, channels=64, growth=32, beta=0.2):
+class Generator(nn.Module):
+  def __init__(self, num_blocks=23):
     super().__init__()
 
-    self.beta = beta
-    self.convs = nn.ModuleList([
-      nn.Conv2d(channels + i * growth, growth, 3, 1, 1)
-      for i in range(4)
-    ])
+    self.sr = ES.RRDBNet16x(num_blocks=num_blocks)
 
-    self.activation = nn.LeakyReLU(0.2, inplace=True)
-    self.final_conv = nn.Conv2d(channels + 4 * growth, channels, 1, 1, 0)
+  def load_net(self, path):
+    try:
+      data = torch.load(path, weights_only=True, map_location='cpu')
+      self.sr.load_state_dict(data['state_dict'])
+      print(f"Loaded from checkpoint at epoch {data['epoch'] + 1}")
+    except Exception as e:
+      print(f"Error loading checkpoint: {e}")
 
   def forward(self, x):
-    features = [x]
-    for i, conv in enumerate(self.convs):
-      out = self.activation(conv(torch.cat(features, dim=1)))
-      if i % 2 == 0:
-        skip_connection = out
-      else:
-        out = skip_connection + out * self.beta
-      features.append(out)
-    out = torch.cat(features, dim=1)
-    out = self.final_conv(out)
-    return out
-
-class RRDB(nn.Module):
-  def __init__(self, channels=64, growth=32, beta=0.2):
-    super().__init__()
-    self.beta = beta
-    self.DB1 = DenseBlock(channels, growth, beta)
-    self.DB2 = DenseBlock(channels, growth, beta)
-    self.DB3 = DenseBlock(channels, growth, beta)
-    self.noise_factor_1 = nn.Parameter(torch.tensor(0.0))
-    self.noise_factor_2 = nn.Parameter(torch.tensor(0.0))
-    self.noise_factor_3 = nn.Parameter(torch.tensor(0.0))
-
-  def forward(self, x):
-    out = x
-    out = out + self.DB1(out) * self.beta + self.noise_factor_1 * torch.randn_like(out)
-    out = out + self.DB2(out) * self.beta + self.noise_factor_2 * torch.randn_like(out)
-    out = out + self.DB3(out) * self.beta + self.noise_factor_3 * torch.randn_like(out)
-    return out
-
-class UpscaleBlock(nn.Module):
-  def __init__(self, channels=64, scale=2):
-    super().__init__()
-    self.block = nn.Sequential(
-      nn.Conv2d(channels, channels * (scale ** 2), kernel_size=3, padding=1),
-      nn.PixelShuffle(scale),
-      nn.PReLU()
-    )
-
-  def forward(self, x):
-    return self.block(x)
-
-class RRDBNet(nn.Module):
-  def __init__(self, num_blocks=23, channels=64, growth=32):
-    super().__init__()
-
-    self.head = nn.Sequential(
-      nn.Conv2d(3, channels, kernel_size=9, padding=4),
-      nn.PReLU()
-    )
-
-    self.res_blocks = nn.Sequential(
-      *[RRDB(channels, growth) for _ in range(num_blocks)]
-    )
-
-    self.trunk_conv = nn.Sequential(
-      nn.Conv2d(channels, channels, kernel_size=3, padding=1)
-    )
-
-    self.upscale = nn.Sequential(
-      UpscaleBlock(channels, scale=2),
-    )
-
-    self.final = nn.Conv2d(channels, 3, kernel_size=9, padding=4)
-
-    # Initialize final layer with zeros
-    self.final.weight.data.zero_()
-    self.final.bias.data.zero_()
-
-  def forward(self, x):
-    x_head = self.head(x)
-    x_res = self.res_blocks(x_head)
-    x_trunk = self.trunk_conv(x_res)
-    x = x_head + x_trunk
-    x = self.upscale(x)
-    x = self.final(x)
+    x = self.sr(x)
     return x
-  
-  def forward_features(self, x):
-    x_head = self.head(x)
-    x_res = self.res_blocks(x_head)
-    x_trunk = self.trunk_conv(x_res)
-    x = x_head + x_trunk
+
+  @staticmethod
+  def save(model, path, epoch, iter):
+    try:
+      torch.save({
+        'state_dict': model.state_dict(),
+        'epoch': epoch,
+        'iter': iter
+      }, path + '.tmp')
+      os.replace(path + '.tmp', path)
+    except Exception as e:
+      print(f"Error saving checkpoint: {e}")
+
+  @staticmethod
+  def load(path, sr_path=None):
+      try:
+        data = torch.load(path, weights_only=True, map_location='cpu')
+        model = Generator()
+        model.load_state_dict(data['state_dict'])
+        print(f"Loaded from checkpoint at epoch {data['epoch'] + 1} and iter {data['iter']}")
+        return model, data['epoch'], data['iter']
+      except Exception as e:
+        print(f"Error loading checkpoint: {e}")
+        print("Creating new model...")
+        model = Generator()
+        if sr_path is not None:
+          model.load_net(sr_path)
+        return model, 0, 0
+
+class Discriminator(nn.Module):
+  def __init__(self):
+    super().__init__()
+
+    self.conv1 = nn.Sequential(
+      SN(nn.Conv2d(3, 64, 3, 1, 1)), # 256x256
+      nn.LeakyReLU(0.2, inplace=True)
+    )
+
+    self.conv_block = nn.Sequential(
+      SN(nn.Conv2d(64, 64, 3, 2, 1)), # 128x128
+      nn.LeakyReLU(0.2, inplace=True),
+
+      SN(nn.Conv2d(64, 128, 3, 1, 1)),
+      nn.LeakyReLU(0.2, inplace=True),
+
+      SN(nn.Conv2d(128, 128, 3, 2, 1)), # 64x64
+      nn.LeakyReLU(0.2, inplace=True),
+
+      SN(nn.Conv2d(128, 256, 3, 1, 1)),
+      nn.LeakyReLU(0.2, inplace=True),
+
+      SN(nn.Conv2d(256, 256, 3, 2, 1)), # 32x32
+      nn.LeakyReLU(0.2, inplace=True),
+
+      SN(nn.Conv2d(256, 512, 3, 1, 1)),
+      nn.LeakyReLU(0.2, inplace=True),
+
+      SN(nn.Conv2d(512, 512, 3, 2, 1)), # 16x16
+      nn.LeakyReLU(0.2, inplace=True),
+
+      SN(nn.Conv2d(512, 512, 3, 1, 1)),
+      nn.LeakyReLU(0.2, inplace=True),
+
+      SN(nn.Conv2d(512, 512, 3, 2, 1)), # 8x8
+      nn.LeakyReLU(0.2, inplace=True)
+    )
+
+    # Adaptive average pooling is not needed for input size 128x128
+    # self.avg_pool = nn.AdaptiveAvgPool2d((8, 8))
+
+    self.linear = nn.Sequential(
+      nn.Flatten(),
+      nn.Linear(512 * 8 * 8, 1024),
+      nn.LeakyReLU(0.2, inplace=True),
+      nn.Linear(1024, 1)
+    )
+
+  def forward(self, x):
+    x = self.conv1(x)
+    x = self.conv_block(x)
+    x = self.linear(x)
     return x
 
   @staticmethod
@@ -135,129 +128,202 @@ class RRDBNet(nn.Module):
   def load(path):
     try:
       data = torch.load(path, weights_only=True, map_location='cpu')
-      model = RRDBNet()
+      model = Discriminator()
       model.load_state_dict(data['state_dict'])
-      print(f"Loaded from checkpoint at epoch {data['epoch'] + 1}")
+      print(f"Loaded from checkpoint at epoch {data['epoch'] + 1} and iter {data['iter']}")
       return model, data['epoch'], data['iter']
     except Exception as e:
       print(f"Error loading checkpoint: {e}")
       print("Creating new model...")
-      return RRDBNet(), 0, 0
+      return Discriminator(), 0, 0
 
-class RRDBNet16x(nn.Module):
-  """
-  RRDBNet variant for 16x upscaling.
-  This module extends the RRDBNet by adding an additional UpscaleBlock.
-  """
-  def __init__(self, num_blocks=23, channels=64, growth=32):
+class PerceptualLoss(nn.Module):
+  def __init__(self, device):
     super().__init__()
-    self.rrdbnet = RRDBNet(num_blocks, channels, growth)
-    self.upscale = UpscaleBlock()
+    
+    # These numbers come from the official VGG19 documentation
+    # https://docs.pytorch.org/vision/main/models/generated/torchvision.models.vgg19.html
+    self.mean = torch.tensor([0.485, 0.456, 0.406]).view(1,3,1,1).to(device)
+    self.std = torch.tensor([0.229, 0.224, 0.225]).view(1,3,1,1).to(device)
 
-    self.upscale = nn.Sequential(
-      UpscaleBlock(64, scale=2),
-      UpscaleBlock(64, scale=2)
-    )
+    # Stop at the 4th convolution before the 5th maxpool
+    i = 5 # Max pool
+    j = 4 # Conv
 
-    self.final = nn.Conv2d(64, 3, kernel_size=9, padding=4)
+    # Load the pre-trained VGG19 available in torchvision
+    vgg19 = torchvision.models.vgg19(weights=torchvision.models.VGG19_Weights.IMAGENET1K_V1)
+    features = list(vgg19.features.children())
 
-    # Initialize final layer with zeros
-    self.final.weight.data.zero_()
-    self.final.bias.data.zero_()
+    # Keep track of what maxpool and convolution layer we are at
+    maxpool_counter = 0
+    conv_counter = 0
+    truncate_at = 0
+    
+    # Iterate through the convolutional section ("features") of the VGG19
+    for layer in features:
+      truncate_at += 1
 
-  def forward(self, x):
-    x = self.rrdbnet.forward_features(x)
-    x = self.upscale(x)
-    x = self.final(x)
-    return x
-  
-  @staticmethod
-  def save(model, path, epoch, iter):
-    try:
-      torch.save({
-        'state_dict': model.state_dict(),
-        'epoch': epoch,
-        'iter': iter
-      }, path + '.tmp')
-      os.replace(path + '.tmp', path)
-    except Exception as e:
-      print(f"Error saving checkpoint: {e}")
+      # Count the number of maxpool layers and the convolutional layers after each maxpool
+      if isinstance(layer, nn.Conv2d):
+        conv_counter += 1
+      if isinstance(layer, nn.MaxPool2d):
+        maxpool_counter += 1
+        conv_counter = 0
 
-  @staticmethod
-  def load(path, rrdbnet_path=None):
-    try:
-      model = RRDBNet16x()
-      data = torch.load(path, weights_only=True, map_location='cpu')
-      model.load_state_dict(data['state_dict'])
-      print(f"Loaded from checkpoint at epoch {data['epoch'] + 1}")
-      return model, data['epoch'], data['iter']
-    except Exception as e:
-      if rrdbnet_path is None: raise 'Error loading checkpoint and no RRDBNet path provided'
-      model = RRDBNet16x()
-      rrdbnet = RRDBNet.load(rrdbnet_path)[0]
-      model.rrdbnet = rrdbnet
-      print(f"Error loading checkpoint: {e}")
-      print("Creating new model...")
-      return model, 0, 0
+      # Break if we reach the jth convolution after the (i - 1)th maxpool
+      if maxpool_counter == i - 1 and conv_counter == j: break
+
+    # Check if conditions were satisfied
+    assert maxpool_counter == i - 1 and conv_counter == j, "One or both of i=%d and j=%d are not valid choices for the VGG19!" % (i, j)
+    
+    # Truncate to the jth convolution (skip activation) before the ith maxpool layer
+    self.truncated_vgg19 = nn.Sequential(*features[:truncate_at])
+
+  def forward(self, x, y):
+    if x.shape[1] == 1:
+      # Repeat the grayscale image 3 times (B, C, H, W)
+      x = x.repeat(1, 3, 1, 1)
+      y = y.repeat(1, 3, 1, 1)
+
+    # Normalize to ImageNet mean and std
+    x = (x - self.mean) / self.std
+    y = (y - self.mean) / self.std
+
+    x = self.truncated_vgg19(x)
+    y = self.truncated_vgg19(y)
+
+    return torch.mean((x - y) ** 2)
+
+def interpolate_models(model_a: nn.Module, model_b: nn.Module, alpha=0.5):
+  model_c = type(model_a)()
+  state_a = model_a.state_dict()
+  state_b = model_b.state_dict()
+  state_c = model_c.state_dict()
+
+  for key in state_a.keys():
+    state_c[key] = state_a[key] * (1 - alpha) + state_b[key] * alpha
+
+  model_c.load_state_dict(state_c)
+  return model_c
+
+def set_lr(opt, iter):
+  lr = 0.0001
+  milestones = [50_000, 100_000, 200_000, 300_000]
+  for milestone in milestones:
+    if iter >= milestone:
+      lr *= 0.5
+  for param_group in opt.param_groups:
+    param_group['lr'] = lr
 
 def train():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   
-  # Models
-  # model, epoch, iter = RRDBNet.load("Models/sr_rrdb_wallpapers_2.pt")
-  # model = model.to(device)
-  model, epoch, iter = RRDBNet16x.load("Models/sr_rrdb16x_wallpapers_2.pt", "Models/sr_rrdb_wallpapers_2.pt")
-  model = model.to(device)
-
   # Data
   dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=256, color=True)
-  loader = DataLoader(dataset, batch_size=16, shuffle=True)
+  loader = DataLoader(dataset, batch_size=10, shuffle=True)
   
-  # Loss
-  loss_fn = nn.L1Loss()
-  scaler = torch.amp.GradScaler('cuda')
-  adam = optim.Adam(model.parameters(), lr=0.0002)
-  total_loss = 0
-  n_losses = 0
-  last_loss = "?"
-  last_saved = "Never"
-
+  # Models
+  gen, epoch, iter = Generator.load("Models/sr_gen_wallpapers_8.pt", "Models/sr_rrdb16x_wallpapers_2.pt")
+  dis = Discriminator.load("Models/sr_dis_wallpapers_8.pt")[0]
+  gen = gen.to(device)
+  dis = dis.to(device)
+  
+  # Optimizers (lr is scheduled so it doesn't matter)
+  gen_opt = optim.Adam(gen.parameters(), lr=0.0001, betas=(0.9, 0.999))
+  dis_opt = optim.Adam(dis.parameters(), lr=0.0001, betas=(0.9, 0.999))
+  
+  # Losses
+  l1_loss_fn = nn.L1Loss()
+  # perceptual_loss_fn = PerceptualLoss(device=device)
+  perceptual_loss_fn = lpips.LPIPS(net='vgg')
+  if device.type == 'cuda': perceptual_loss_fn.cuda()
+  
+  # Training parameters
+  gen_total_loss = 0
+  dis_total_loss = 0
+  adv_total_loss = 0
+  prc_total_loss = 0
+  l1_total_loss = 0
+  
   for i in range(epoch, 10000):
     prog_bar = tqdm(loader)
     for j, (batch_input, batch_target) in enumerate(prog_bar):
       iter += 1
+      
+      set_lr(gen_opt, iter)
+      set_lr(dis_opt, iter)
+
       batch_input = batch_input.to(device)
       batch_target = batch_target.to(device)
-
-      adam.zero_grad()
       
-      with torch.amp.autocast('cuda'):
-        output = model(batch_input)
-        loss_val = loss_fn(output, batch_target)
-      
-      scaler.scale(loss_val).backward()
-      scaler.step(adam)
-      scaler.update()
+      if (iter % 3) != 0:
+        # 1) Train Discriminator
+        dis_opt.zero_grad()
+        sr = gen(batch_input)#.detach()
 
-      total_loss += loss_val.item()
-      n_losses += 1
+        real_logits = dis(batch_target)
+        fake_logits = dis(sr)
 
-      if iter % 50 == 0:
-        last_loss = total_loss / n_losses
-        prog_bar.set_postfix(loss=last_loss, saved=last_saved)
-        total_loss = 0
-        n_losses = 0
-      
+        real_mean = real_logits.mean()
+        fake_mean = fake_logits.mean()
+
+        # Softplus is numerically stable
+        # log(sigmoid(x)) = -softplus(-x)
+        # Relativistic adversarial loss
+        dis_loss = (
+          F.softplus(-(real_logits - fake_mean)).mean() +
+          F.softplus(fake_logits - real_mean).mean()
+        )
+
+        dis_loss.backward()
+        torch.nn.utils.clip_grad_norm_(dis.parameters(), 1.0)
+        dis_opt.step()
+
+        dis_total_loss += dis_loss.item()
+      else:
+        # 2) Train Generator
+        gen_opt.zero_grad()
+        sr = gen(batch_input)
+
+        real_logits = dis(batch_target)
+        fake_logits = dis(sr)
+
+        real_mean = real_logits.mean()
+        fake_mean = fake_logits.mean()
+
+        # Relativistic adversarial loss
+        adv_loss = (
+          F.softplus(-(fake_logits - real_mean)).mean() +
+          F.softplus(real_logits - fake_mean).mean()
+        )
+
+        l1_loss = l1_loss_fn(sr, batch_target)
+        perceptual_loss = perceptual_loss_fn(sr * 2 - 1, batch_target * 2 - 1).mean()
+        gen_loss = perceptual_loss + 0.01 * l1_loss + 0.002 * adv_loss
+
+        gen_loss.backward()
+        gen_opt.step()
+
+        gen_total_loss += gen_loss.item()
+        adv_total_loss += adv_loss.item()
+        prc_total_loss += perceptual_loss.item()
+        l1_total_loss += l1_loss.item()
+
       if iter % 100 == 0:
-        last_saved = f"Epoch {i+1} batch {j}"
-        prog_bar.set_postfix(loss=last_loss, saved=last_saved)
-        RRDBNet16x.save(model, "Models/sr_rrdb16x_wallpapers_2.pt", i, iter)
-        # RRDBNet.save(model, "Models/sr_rrdb_wallpapers_2.pt", i, iter)
+        gen_loss, gen_total_loss = gen_total_loss / 100, 0
+        dis_loss, dis_total_loss = dis_total_loss / 100, 0
+        adv_loss, adv_total_loss = adv_total_loss / 100, 0
+        prc_loss, prc_total_loss = prc_total_loss / 100, 0
+        l1_loss, l1_total_loss = l1_total_loss / 100, 0
+        prog_bar.set_postfix(gen_loss=gen_loss, dis_loss=dis_loss, adv_loss=adv_loss, prc_loss=prc_loss, l1_loss=l1_loss)
+        Generator.save(gen, "Models/sr_gen_wallpapers_8.pt", i, iter)
+        Discriminator.save(dis, "Models/sr_dis_wallpapers_8.pt", i, iter)
 
 def test():
-  # model = RRDBNet.load("Models/sr_rrdb_wallpapers_2.pt")[0]
-  model = RRDBNet16x.load("Models/sr_rrdb16x_wallpapers_2.pt")[0]
-  test_model(model, None, 64, 256, True)
+  model_a = Generator.load("Models/sr_gen_wallpapers_8.pt")[0]
+  model_b = Generator.load("", "Models/sr_rrdb16x_wallpapers_2.pt")[0]
+  # model_c = interpolate_models(model_a, model_b, 0.3)
+  test_model(model_a, model_b, 64, 256, True)
 
 # train()
-# test()
+test()

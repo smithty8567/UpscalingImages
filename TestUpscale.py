@@ -1,5 +1,4 @@
 from torch.utils.data import DataLoader
-from UpscalingImages import Upscaling
 from Data import UpscaleDataset
 import torch
 import matplotlib.pyplot as plt
