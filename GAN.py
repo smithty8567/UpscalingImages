@@ -328,4 +328,4 @@ def test():
   test_model(model_a, model_b, 64, 256, True)
 
 # train()
-test()
+# test()
