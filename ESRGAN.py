@@ -1,23 +1,25 @@
 from torch.utils.data import DataLoader
 from torch import optim
 from tqdm import tqdm
-from Data import UpscaleDataset
-from TestUpscale import test_model
+from data import UpscaleDataset
+from test_model import test_model
+from rrdbnet_16x import RRDBNet16x
 import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils.spectral_norm as SN
-import RRDBNet as ES
 import torchvision
 import lpips
+import configparser as cp
+import sys
 
 # Initialize the generator with a pretrained RRDB network
 class Generator(nn.Module):
   def __init__(self, num_blocks=23):
     super().__init__()
 
-    self.sr = ES.RRDBNet16x(num_blocks=num_blocks)
+    self.sr = RRDBNet16x(num_blocks=num_blocks)
 
   def load_net(self, path):
     try:
@@ -138,75 +140,6 @@ class Discriminator(nn.Module):
       print("Creating new model...")
       return Discriminator(), 0, 0
 
-class PerceptualLoss(nn.Module):
-  def __init__(self, device):
-    super().__init__()
-    
-    # These numbers come from the official VGG19 documentation
-    # https://docs.pytorch.org/vision/main/models/generated/torchvision.models.vgg19.html
-    self.mean = torch.tensor([0.485, 0.456, 0.406]).view(1,3,1,1).to(device)
-    self.std = torch.tensor([0.229, 0.224, 0.225]).view(1,3,1,1).to(device)
-
-    # Stop at the 4th convolution before the 5th maxpool
-    i = 5 # Max pool
-    j = 4 # Conv
-
-    # Load the pre-trained VGG19 available in torchvision
-    vgg19 = torchvision.models.vgg19(weights=torchvision.models.VGG19_Weights.IMAGENET1K_V1)
-    features = list(vgg19.features.children())
-
-    # Keep track of what maxpool and convolution layer we are at
-    maxpool_counter = 0
-    conv_counter = 0
-    truncate_at = 0
-    
-    # Iterate through the convolutional section ("features") of the VGG19
-    for layer in features:
-      truncate_at += 1
-
-      # Count the number of maxpool layers and the convolutional layers after each maxpool
-      if isinstance(layer, nn.Conv2d):
-        conv_counter += 1
-      if isinstance(layer, nn.MaxPool2d):
-        maxpool_counter += 1
-        conv_counter = 0
-
-      # Break if we reach the jth convolution after the (i - 1)th maxpool
-      if maxpool_counter == i - 1 and conv_counter == j: break
-
-    # Check if conditions were satisfied
-    assert maxpool_counter == i - 1 and conv_counter == j, "One or both of i=%d and j=%d are not valid choices for the VGG19!" % (i, j)
-    
-    # Truncate to the jth convolution (skip activation) before the ith maxpool layer
-    self.truncated_vgg19 = nn.Sequential(*features[:truncate_at])
-
-  def forward(self, x, y):
-    if x.shape[1] == 1:
-      # Repeat the grayscale image 3 times (B, C, H, W)
-      x = x.repeat(1, 3, 1, 1)
-      y = y.repeat(1, 3, 1, 1)
-
-    # Normalize to ImageNet mean and std
-    x = (x - self.mean) / self.std
-    y = (y - self.mean) / self.std
-
-    x = self.truncated_vgg19(x)
-    y = self.truncated_vgg19(y)
-
-    return torch.mean((x - y) ** 2)
-
-def interpolate_models(model_a: nn.Module, model_b: nn.Module, alpha=0.5):
-  model_c = type(model_a)()
-  state_a = model_a.state_dict()
-  state_b = model_b.state_dict()
-  state_c = model_c.state_dict()
-
-  for key in state_a.keys():
-    state_c[key] = state_a[key] * (1 - alpha) + state_b[key] * alpha
-
-  model_c.load_state_dict(state_c)
-  return model_c
-
 def set_lr(opt, iter):
   lr = 0.0001
   milestones = [50_000, 100_000, 200_000, 300_000]
@@ -216,16 +149,21 @@ def set_lr(opt, iter):
   for param_group in opt.param_groups:
     param_group['lr'] = lr
 
-def train():
-  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-  
+def train(device):
+  config = cp.ConfigParser()
+  config.read("config.ini")
+  train_filepath = config['DATA']['train_data']
+  psnr_16x_filepath = config['MODEL']['psnr_16x']
+  gen_filepath = config['MODEL']['generator']
+  dis_filepath = config['MODEL']['discriminator']
+
   # Data
-  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=256)
+  dataset = UpscaleDataset(filepath=train_filepath, in_size=64, out_size=256)
   loader = DataLoader(dataset, batch_size=10, shuffle=True)
   
   # Models
-  gen, epoch, iter = Generator.load("Models/sr_gen_wallpapers_8.pt", "Models/sr_rrdb16x_wallpapers_2.pt")
-  dis = Discriminator.load("Models/sr_dis_wallpapers_8.pt")[0]
+  gen, epoch, iter = Generator.load(gen_filepath, psnr_16x_filepath)
+  dis = Discriminator.load(dis_filepath)[0]
   gen = gen.to(device)
   dis = dis.to(device)
   
@@ -235,7 +173,6 @@ def train():
   
   # Losses
   l1_loss_fn = nn.L1Loss()
-  # perceptual_loss_fn = PerceptualLoss(device=device)
   perceptual_loss_fn = lpips.LPIPS(net='vgg')
   if device.type == 'cuda': perceptual_loss_fn.cuda()
   
@@ -317,13 +254,18 @@ def train():
         prc_loss, prc_total_loss = prc_total_loss / 100, 0
         l1_loss, l1_total_loss = l1_total_loss / 100, 0
         prog_bar.set_postfix(gen_loss=gen_loss, dis_loss=dis_loss, adv_loss=adv_loss, prc_loss=prc_loss, l1_loss=l1_loss)
-        Generator.save(gen, "Models/sr_gen_wallpapers_8.pt", i, iter)
-        Discriminator.save(dis, "Models/sr_dis_wallpapers_8.pt", i, iter)
+        Generator.save(gen, gen_filepath, i, iter)
+        Discriminator.save(dis, dis_filepath, i, iter)
 
-def test():
-  model_a = Generator.load("Models/sr_gen_wallpapers_8.pt")[0]
-  model_b = Generator.load("", "Models/sr_rrdb16x_wallpapers_2.pt")[0]
-  test_model(model_a, model_b, 64, 256)
+def test(device):
+  config = cp.ConfigParser()
+  config.read("config.ini")
+  model_a = Generator.load(config['MODEL']['generator'])[0]
+  test_model(model_a, None, 64, 256, device)
 
-# train()
-test()
+if __name__ == "__main__":
+  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+  if "--test" in sys.argv:
+    test(device)
+  else:
+    train(device)

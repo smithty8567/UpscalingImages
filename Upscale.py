@@ -1,51 +1,33 @@
 import cv2
-import numpy as np
 import torch
-from ESRGAN import Generator, interpolate_models
+from esrgan import Generator
+import configparser as cp
+import sys
 
-def get_model_input(rgb: np.ndarray):
-  ycrcb = cv2.cvtColor(rgb, cv2.COLOR_BGR2YCR_CB)
-  y = ycrcb[..., 0]
-  crcb = ycrcb[..., 1:]
-  y = torch.from_numpy(y).unsqueeze(2).permute(2, 0, 1).unsqueeze(0).float() / 255
-  return y, crcb
+def upscale_image(target_path="target.png", input_path="input.png", output_path="output.png", device="cpu"):
+  config = cp.ConfigParser()
+  config.read("config.ini")
+  gen_filepath = config['MODEL']['generator']
 
-def get_model_output(y: torch.Tensor, crcb: np.ndarray):
-  y = y.cpu().permute(0, 2, 3, 1)[0].detach().numpy()
-  y = (y * 255).clip(0, 255).astype('uint8')
-  crcb = cv2.resize(crcb, (y.shape[1], y.shape[0]))
-  output_image = y
-  ycrcb = np.concatenate((y, crcb), axis=2)
-  output_image = cv2.cvtColor(ycrcb, cv2.COLOR_YCR_CB2BGR)
-  output_image = output_image
-  return output_image
+  model = Generator.load(gen_filepath)[0]
+  model = model.to(device)
+  model.eval()
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+  x = cv2.imread(target_path)
+  x = cv2.resize(x, (x.shape[1] // 2, x.shape[0] // 2))
+  x = cv2.imwrite(input_path, x)
+  x = torch.from_numpy(x).unsqueeze(0).permute(0, 3, 1, 2).float() / 255
+  x = x.to(device)
 
-model_a = Generator.load("Models/sr_gen_wallpapers_8.pt")[0]
-# model_b = Generator.load("", "Models/sr_rrdb.pt")[0]
-# model_c = interpolate_models(model_a, model_b, 0.3)
-model = model_a
+  sr = model(x)
+  sr = sr.permute(0, 2, 3, 1)[0].cpu().detach().numpy()
+  sr = (sr * 255).clip(0, 255).astype('uint8')
 
-model = model.to(device)
-model.eval()
+  cv2.imwrite(output_path, sr)
 
-rgb = cv2.imread("input.jpg")
-rgb = cv2.resize(rgb, (rgb.shape[1] // 2, rgb.shape[0] // 2))
-rgb = cv2.imwrite("input_resized.png", rgb)
-rgb = torch.from_numpy(rgb).unsqueeze(0).permute(0, 3, 1, 2).float() / 255
-rgb = rgb.to(device)
-
-output_image = model(rgb)
-
-output_image = output_image.permute(0, 2, 3, 1)[0].cpu().detach().numpy()
-output_image = (output_image * 255).clip(0, 255).astype('uint8')
-
-# rgb = cv2.resize(rgb, (rgb.shape[1] // 2, rgb.shape[0] // 2))
-# y, crcb = get_model_input(rgb)
-# y = y.to(device).detach()
-# y = model(y)
-# output_image = get_model_output(y, crcb)
-
-cv2.imwrite("output.png", output_image)
-
+if __name__ == "__main__":
+  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+  target_path = sys.argv[1] if len(sys.argv) > 1 else "target.png"
+  input_path = sys.argv[2] if len(sys.argv) > 2 else "input.png"
+  output_path = sys.argv[3] if len(sys.argv) > 3 else "output.png"
+  upscale_image(target_path, input_path, output_path, device)

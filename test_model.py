@@ -1,14 +1,18 @@
 from torch.utils.data import DataLoader
-from Data import UpscaleDataset
+from data import UpscaleDataset
 import torch
 import matplotlib.pyplot as plt
 import os
 import cv2
+import configparser as cp
 
-def test_model(model, old_model=None, in_size=64, out_size=128):
-  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def test_model(model, old_model=None, in_size=64, out_size=128, device="cpu"):
+  config = cp.ConfigParser()
+  config.read("config.ini")
+  test_filepath = config['DATA']['test_data']
+  
   model = model.to(device)
-  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Test3", in_size=in_size, out_size=out_size)
+  dataset = UpscaleDataset(filepath=test_filepath, in_size=in_size, out_size=out_size)
   loader = DataLoader(dataset, batch_size=1, shuffle=True)
   model_name = "GAN"
 
@@ -28,10 +32,8 @@ def test_model(model, old_model=None, in_size=64, out_size=128):
 
     with torch.no_grad():
       output = model(batch_input)
-      # output = model(output)
       old_output = old_model(batch_input)
-      # old_output = old_model(old_output)
-
+    
     output = torch.clamp(output, 0, 1)
     old_output = torch.clamp(old_output, 0, 1)
 
@@ -51,6 +53,8 @@ def test_model(model, old_model=None, in_size=64, out_size=128):
       if event.key == 'w':
         n_files = len(os.listdir('Images'))
         cv2.imwrite(f"Images/output_{n_files}.png", (output_image * 255).astype('uint8'))
+      if event.key == 'escape':
+        exit()
 
     fig.canvas.mpl_connect('key_press_event', save_output)
 
