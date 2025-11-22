@@ -8,6 +8,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn.utils.spectral_norm as SN
 import SRResNet as SR
 import ESRGAN as ES
 import torchvision
@@ -17,7 +18,7 @@ class Generator(nn.Module):
   def __init__(self, num_blocks=23):
     super().__init__()
 
-    self.sr = ES.RRDBNet(num_blocks=num_blocks)
+    self.sr = ES.RRDBNet16x(num_blocks=num_blocks)
 
   def load_net(self, path):
     try:
@@ -64,46 +65,37 @@ class Discriminator(nn.Module):
     super().__init__()
 
     self.conv1 = nn.Sequential(
-      nn.Conv2d(3, 64, 3, 1, 1), # 256x256
+      SN(nn.Conv2d(3, 64, 3, 1, 1)), # 256x256
       nn.LeakyReLU(0.2, inplace=True)
     )
 
     self.conv_block = nn.Sequential(
-      nn.Conv2d(64, 64, 3, 2, 1), # 128x128
-      nn.BatchNorm2d(64),
+      SN(nn.Conv2d(64, 64, 3, 2, 1)), # 128x128
       nn.LeakyReLU(0.2, inplace=True),
 
-      nn.Conv2d(64, 128, 3, 1, 1),
-      nn.BatchNorm2d(128),
+      SN(nn.Conv2d(64, 128, 3, 1, 1)),
       nn.LeakyReLU(0.2, inplace=True),
 
-      nn.Conv2d(128, 128, 3, 2, 1), # 64x64
-      nn.BatchNorm2d(128),
+      SN(nn.Conv2d(128, 128, 3, 2, 1)), # 64x64
       nn.LeakyReLU(0.2, inplace=True),
 
-      nn.Conv2d(128, 256, 3, 1, 1),
-      nn.BatchNorm2d(256),
+      SN(nn.Conv2d(128, 256, 3, 1, 1)),
       nn.LeakyReLU(0.2, inplace=True),
 
-      nn.Conv2d(256, 256, 3, 2, 1), # 32x32
-      nn.BatchNorm2d(256),
+      SN(nn.Conv2d(256, 256, 3, 2, 1)), # 32x32
       nn.LeakyReLU(0.2, inplace=True),
 
-      nn.Conv2d(256, 512, 3, 1, 1),
-      nn.BatchNorm2d(512),
+      SN(nn.Conv2d(256, 512, 3, 1, 1)),
       nn.LeakyReLU(0.2, inplace=True),
 
-      nn.Conv2d(512, 512, 3, 2, 1), # 16x16
-      nn.BatchNorm2d(512),
+      SN(nn.Conv2d(512, 512, 3, 2, 1)), # 16x16
       nn.LeakyReLU(0.2, inplace=True),
 
-      # nn.Conv2d(512, 1024, 3, 1, 1),
-      # nn.BatchNorm2d(1024),
-      # nn.LeakyReLU(0.2, inplace=True),
+      SN(nn.Conv2d(512, 512, 3, 1, 1)),
+      nn.LeakyReLU(0.2, inplace=True),
 
-      # nn.Conv2d(1024, 1024, 3, 2, 1), # 8x8
-      # nn.BatchNorm2d(1024),
-      # nn.LeakyReLU(0.2, inplace=True)
+      SN(nn.Conv2d(512, 512, 3, 2, 1)), # 8x8
+      nn.LeakyReLU(0.2, inplace=True)
     )
 
     # Adaptive average pooling is not needed for input size 128x128
@@ -229,12 +221,12 @@ def train():
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   
   # Data
-  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=128, color=True)
-  loader = DataLoader(dataset, batch_size=7, shuffle=True)
+  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=256, color=True)
+  loader = DataLoader(dataset, batch_size=10, shuffle=True)
   
   # Models
-  gen, epoch, iter = Generator.load("Models/sr_gen_wallpapers_5.pt", "Models/sr_rrdb_wallpapers_2.pt")
-  dis = Discriminator.load("Models/sr_dis_wallpapers_5.pt")[0]
+  gen, epoch, iter = Generator.load("Models/sr_gen_wallpapers_8.pt", "Models/sr_rrdb16x_wallpapers_2.pt")
+  dis = Discriminator.load("Models/sr_dis_wallpapers_8.pt")[0]
   gen = gen.to(device)
   dis = dis.to(device)
   
@@ -271,10 +263,6 @@ def train():
         dis_opt.zero_grad()
         sr = gen(batch_input)#.detach()
 
-        # Downscale and re-upscale real images for better stability
-        sr = F.interpolate(sr, scale_factor=0.5, mode='bicubic')
-        sr = gen(sr).detach()
-        
         real_logits = dis(batch_target)
         fake_logits = dis(sr)
 
@@ -299,10 +287,6 @@ def train():
         gen_opt.zero_grad()
         sr = gen(batch_input)
 
-        # Downscale and re-upscale real images for better stability
-        sr = F.interpolate(sr, scale_factor=0.5, mode='bicubic')
-        sr = gen(sr)
-
         real_logits = dis(batch_target)
         fake_logits = dis(sr)
 
@@ -317,7 +301,7 @@ def train():
 
         l1_loss = l1_loss_fn(sr, batch_target)
         perceptual_loss = perceptual_loss_fn(sr * 2 - 1, batch_target * 2 - 1).mean()
-        gen_loss = perceptual_loss + 0.005 * l1_loss + 0.001 * adv_loss
+        gen_loss = perceptual_loss + 0.01 * l1_loss + 0.002 * adv_loss
 
         gen_loss.backward()
         gen_opt.step()
@@ -334,12 +318,12 @@ def train():
         prc_loss, prc_total_loss = prc_total_loss / 100, 0
         l1_loss, l1_total_loss = l1_total_loss / 100, 0
         prog_bar.set_postfix(gen_loss=gen_loss, dis_loss=dis_loss, adv_loss=adv_loss, prc_loss=prc_loss, l1_loss=l1_loss)
-        Generator.save(gen, "Models/sr_gen_wallpapers_5.pt", i, iter)
-        Discriminator.save(dis, "Models/sr_dis_wallpapers_5.pt", i, iter)
+        Generator.save(gen, "Models/sr_gen_wallpapers_8.pt", i, iter)
+        Discriminator.save(dis, "Models/sr_dis_wallpapers_8.pt", i, iter)
 
 def test():
-  model_a = Generator.load("Models/sr_gen_wallpapers_5.pt")[0]
-  model_b = Generator.load("", "Models/sr_rrdb_wallpapers_2.pt")[0]
+  model_a = Generator.load("Models/sr_gen_wallpapers_8.pt")[0]
+  model_b = Generator.load("", "Models/sr_rrdb16x_wallpapers_2.pt")[0]
   # model_c = interpolate_models(model_a, model_b, 0.3)
   test_model(model_a, model_b, 64, 256, True)
 

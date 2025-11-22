@@ -149,9 +149,9 @@ class RRDBNet16x(nn.Module):
   RRDBNet variant for 16x upscaling.
   This module extends the RRDBNet by adding an additional UpscaleBlock.
   """
-  def __init__(self):
+  def __init__(self, num_blocks=23, channels=64, growth=32):
     super().__init__()
-    self.rrdbnet = RRDBNet()
+    self.rrdbnet = RRDBNet(num_blocks, channels, growth)
     self.upscale = UpscaleBlock()
 
     self.upscale = nn.Sequential(
@@ -260,4 +260,4 @@ def test():
   test_model(model, None, 64, 256, True)
 
 # train()
-test()
+# test()

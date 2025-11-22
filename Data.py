@@ -237,7 +237,7 @@ def segment_images():
 
 def filter_images():
   # Remove all images with height/width < 256
-  path = 'Datasets/Wallpapers/Train3'
+  path = 'Datasets/Wallpapers/Test3'
   dirs = generate_directory_list(path, None)
 
   for path in tqdm.tqdm(dirs):
