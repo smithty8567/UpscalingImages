@@ -74,7 +74,7 @@ class ImageProcessing:
     # Resize to in_size
     image = cv2.resize(image, (in_size, in_size), interpolation=interpolation)
 
-    # Add noise (gaussian, poisson)
+    # Add noise (gaussian)
     if random.random() < 0.2:
       noise_type = random.choice(['color', 'bw'])
       image = image / 255.0

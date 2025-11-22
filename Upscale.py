@@ -1,8 +1,7 @@
-import SRResNet as SR
 import cv2
 import numpy as np
 import torch
-from GAN import Generator, interpolate_models
+from ESRGAN import Generator, interpolate_models
 
 def get_model_input(rgb: np.ndarray):
   ycrcb = cv2.cvtColor(rgb, cv2.COLOR_BGR2YCR_CB)

@@ -323,7 +323,7 @@ def train():
 def test():
   model_a = Generator.load("Models/sr_gen_wallpapers_8.pt")[0]
   model_b = Generator.load("", "Models/sr_rrdb16x_wallpapers_2.pt")[0]
-  test_model(model_a, model_b, 64, 256, True)
+  test_model(model_a, model_b, 64, 256)
 
 # train()
 test()
