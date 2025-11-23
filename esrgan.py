@@ -4,6 +4,7 @@ from tqdm import tqdm
 from data import UpscaleDataset
 from test_model import test_model
 from rrdbnet_16x import RRDBNet16x
+from metrics_logger import MetricLogger
 import os
 import torch
 import torch.nn as nn
@@ -177,19 +178,20 @@ def train(device):
   if device.type == 'cuda': perceptual_loss_fn.cuda()
   
   # Training parameters
+  log = MetricLogger('Logs/esrgan.csv', ['gen_loss', 'dis_loss', 'adv_loss', 'prc_loss', 'l1_loss'])
   gen_total_loss = 0
   dis_total_loss = 0
   adv_total_loss = 0
   prc_total_loss = 0
   l1_total_loss = 0
-  
+
   for i in range(epoch, 10000):
     prog_bar = tqdm(loader)
     for j, (batch_input, batch_target) in enumerate(prog_bar):
       iter += 1
       
-      set_lr(gen_opt, iter)
-      set_lr(dis_opt, iter)
+      set_lr(gen_opt, iter // 5)
+      set_lr(dis_opt, iter // 5)
 
       batch_input = batch_input.to(device)
       batch_target = batch_target.to(device)
@@ -197,7 +199,7 @@ def train(device):
       if (iter % 3) != 0:
         # 1) Train Discriminator
         dis_opt.zero_grad()
-        sr = gen(batch_input)#.detach()
+        sr = gen(batch_input).detach()
 
         real_logits = dis(batch_target)
         fake_logits = dis(sr)
@@ -217,6 +219,7 @@ def train(device):
         torch.nn.utils.clip_grad_norm_(dis.parameters(), 1.0)
         dis_opt.step()
 
+        log.log_metric('dis_loss', dis_loss.item())
         dis_total_loss += dis_loss.item()
       else:
         # 2) Train Generator
@@ -237,25 +240,32 @@ def train(device):
 
         l1_loss = l1_loss_fn(sr, batch_target)
         perceptual_loss = perceptual_loss_fn(sr * 2 - 1, batch_target * 2 - 1).mean()
-        gen_loss = perceptual_loss + 0.005 * l1_loss + 0.001 * adv_loss
+        gen_loss = perceptual_loss + 0.01 * l1_loss + 0.001 * adv_loss
 
         gen_loss.backward()
+        torch.nn.utils.clip_grad_norm_(gen.parameters(), 1.0)
         gen_opt.step()
 
+        log.log_metric('gen_loss', gen_loss.item())
+        log.log_metric('adv_loss', adv_loss.item())
+        log.log_metric('prc_loss', perceptual_loss.item())
+        log.log_metric('l1_loss', l1_loss.item())
         gen_total_loss += gen_loss.item()
         adv_total_loss += adv_loss.item()
         prc_total_loss += perceptual_loss.item()
         l1_total_loss += l1_loss.item()
 
       if iter % 100 == 0:
-        gen_loss, gen_total_loss = gen_total_loss / 100, 0
-        dis_loss, dis_total_loss = dis_total_loss / 100, 0
-        adv_loss, adv_total_loss = adv_total_loss / 100, 0
-        prc_loss, prc_total_loss = prc_total_loss / 100, 0
-        l1_loss, l1_total_loss = l1_total_loss / 100, 0
+        dis_loss, dis_total_loss = dis_total_loss / 80, 0
+        gen_loss, gen_total_loss = gen_total_loss / 20, 0
+        adv_loss, adv_total_loss = adv_total_loss / 20, 0
+        prc_loss, prc_total_loss = prc_total_loss / 20, 0
+        l1_loss, l1_total_loss = l1_total_loss / 20, 0
         prog_bar.set_postfix(gen_loss=gen_loss, dis_loss=dis_loss, adv_loss=adv_loss, prc_loss=prc_loss, l1_loss=l1_loss)
         Generator.save(gen, gen_filepath, i, iter)
         Discriminator.save(dis, dis_filepath, i, iter)
+
+      log.next_iter()
 
 def test(device):
   config = cp.ConfigParser()
