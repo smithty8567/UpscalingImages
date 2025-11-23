@@ -237,7 +237,7 @@ def train(device):
 
         l1_loss = l1_loss_fn(sr, batch_target)
         perceptual_loss = perceptual_loss_fn(sr * 2 - 1, batch_target * 2 - 1).mean()
-        gen_loss = perceptual_loss + 0.01 * l1_loss + 0.002 * adv_loss
+        gen_loss = perceptual_loss + 0.005 * l1_loss + 0.001 * adv_loss
 
         gen_loss.backward()
         gen_opt.step()

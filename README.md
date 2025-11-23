@@ -2,6 +2,7 @@
 The goal of this project was to design a model to upscale images by 4x and 16x their original resolution. The models featured in this repository are based off the [SRGAN](https://arxiv.org/abs/1609.04802), [ESRGAN](https://arxiv.org/abs/1809.00219), and [ESRGAN+](https://arxiv.org/abs/2001.08073) research papers. In the image below, input is the low resolution image to upscale, target is the original high resolution image, and GAN is the upscaled image using the fully trained model.
 
 ![Upscaled Landscape](Assets/upscaled_landscape.png)
+![Upscaled River](Assets/upscaled_river.png)
 
 ## Data.py
 https://www.kaggle.com/datasets/evgeniumakov/images4k
@@ -54,6 +55,6 @@ The first step to making the image upscaler is to train the base 4x upscaling mo
 ### Base 16x Upscaling `rrdbnet_16x.py`
 The second step starts with initializing the 16x model with the previous 4x model. This way, we just need to train the last few layers to upscale to 16x resolution. The training parameters are the same as the base 4x upscaling model.
 ### GAN `esrgan.py`
-Once the 16x model is fully trained, we use it to initialize the generator for the final model. The discriminator learns from scratch. When training the GAN we needed to reduce the batch size to 10 because of limited video memory. It is recommended to train this with a much higher batch size (original paper is 48). For the optimizer, we are also using Adam, but the learning rate decreases over time. It starts at 0.0001 and decreases by half every 50k, 100k, 200k, and 300k batches. For the discriminator loss, we are using relativistic hinge loss. For the generator loss, we are using perceptual loss, l1 loss (scaled by 0.01), and relativistic hinge loss (scaled by 0.002).
+Once the 16x model is fully trained, we use it to initialize the generator for the final model. The discriminator learns from scratch. When training the GAN we needed to reduce the batch size to 10 because of limited video memory. It is recommended to train this with a much higher batch size (original paper is 48). For the optimizer, we are also using Adam, but the learning rate decreases over time. It starts at 0.0001 and decreases by half every 50k, 100k, 200k, and 300k batches. For the discriminator loss, we are using relativistic hinge loss. For the generator loss, we are using perceptual loss, l1 loss (scaled by 0.005), and relativistic hinge loss (scaled by 0.001).
 ### Final Notes
 This model was trained using an RTX 4080 GPU. The entire training process takes about 1.5 days to complete.
