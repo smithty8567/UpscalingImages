@@ -14,6 +14,7 @@ class DenseBlock(nn.Module):
     super().__init__()
 
     self.beta = beta
+    self.skip_conv = nn.Conv2d(channels, growth, 1, 1, 0)
     self.convs = nn.ModuleList([
       nn.Conv2d(channels + i * growth, growth, 3, 1, 1)
       for i in range(4)
@@ -24,26 +25,23 @@ class DenseBlock(nn.Module):
 
   def forward(self, x):
     features = [x]
+    skip_connection = self.skip_conv(x)
     for i, conv in enumerate(self.convs):
       out = self.activation(conv(torch.cat(features, dim=1)))
-      if i % 2 == 0:
-        skip_connection = out
-      else:
+      if i % 2 == 1:
         out = skip_connection + out * self.beta
+        skip_connection = out
       features.append(out)
-    out = torch.cat(features, dim=1)
-    out = self.final_conv(out)
+    out = self.final_conv(torch.cat(features, dim=1))
     return out
 
 class RRDB(nn.Module):
   """
-      Residual in Residual Dense Block class for the ESRGAN.
-
-      Args:
-        channels (int): Starting Channels for Dense Blocks.
-        growth (int): Growth of the Convolutions in Dense Blocks.
-        beta (float): Negative slope for LeakyReLU.
-
+  Residual in Residual Dense Block class for the ESRGAN.
+  Args:
+    channels (int): Starting Channels for Dense Blocks.
+    growth (int): Growth of the Convolutions in Dense Blocks.
+    beta (float): Negative slope for LeakyReLU.
   """
   def __init__(self, channels=64, growth=32, beta=0.2):
     super().__init__()
@@ -146,13 +144,14 @@ def train(device):
   config = cp.ConfigParser()
   config.read("config.ini")
   rrdb4x_filepath = config['MODEL']['psnr_4x']
+  data_filepath = config['DATA']['train_data']
   
   # Models
   model, epoch, iter = RRDBNet.load(rrdb4x_filepath)
   model = model.to(device)
 
   # Data
-  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=128)
+  dataset = UpscaleDataset(filepath=data_filepath, in_size=64, out_size=128)
   loader = DataLoader(dataset, batch_size=16, shuffle=True)
   
   # Loss

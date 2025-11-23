@@ -59,12 +59,12 @@ def test_model(model, old_model=None, in_size=64, out_size=128, device="cpu"):
     fig.canvas.mpl_connect('key_press_event', save_output)
 
     axs[0].imshow(input_image, interpolation='nearest')
-    axs[1].imshow(target_image)
-    axs[2].imshow(output_image)
+    axs[1].imshow(output_image)
+    axs[2].imshow(target_image)
     axs[3].imshow(old_output_image)
     axs[0].set_title("Input")
-    axs[1].set_title("Target")
-    axs[2].set_title(model_name)
+    axs[1].set_title(model_name)
+    axs[2].set_title("Target")
     axs[3].set_title(old_model_name)
     for i in range(4):
       axs[i].set_xticks([])

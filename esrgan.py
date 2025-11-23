@@ -261,7 +261,8 @@ def test(device):
   config = cp.ConfigParser()
   config.read("config.ini")
   model_a = Generator.load(config['MODEL']['generator'])[0]
-  test_model(model_a, None, 64, 256, device)
+  model_b = Generator.load("", config['MODEL']['psnr_16x'])[0]
+  test_model(model_a, model_b, 64, 256, device)
 
 if __name__ == "__main__":
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

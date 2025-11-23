@@ -69,21 +69,22 @@ class RRDBNet16x(nn.Module):
 def train(device):
   config = cp.ConfigParser()
   config.read("config.ini")
-  rrdb4x_filepath = f"Models/{config['MODEL']['psnr_4x']}"
-  rrdb16x_filepath = f"Models/{config['MODEL']['psnr_16x']}"
+  rrdb4x_filepath = config['MODEL']['psnr_4x']
+  rrdb16x_filepath = config['MODEL']['psnr_16x']
+  data_filepath = config['DATA']['train_data']
 
   # Models
   model, epoch, iter = RRDBNet16x.load(rrdb16x_filepath, rrdb4x_filepath)
   model = model.to(device)
 
   # Data
-  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=256)
+  dataset = UpscaleDataset(filepath=data_filepath, in_size=64, out_size=256)
   loader = DataLoader(dataset, batch_size=16, shuffle=True)
   
   # Loss
   loss_fn = nn.L1Loss()
   scaler = torch.amp.GradScaler('cuda')
-  adam = optim.Adam(model.parameters(), lr=0.0002)
+  adam = optim.Adam(model.parameters(), lr=0.00005)
   total_loss = 0
   n_losses = 0
   last_loss = "?"
