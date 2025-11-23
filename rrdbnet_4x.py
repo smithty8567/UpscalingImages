@@ -145,14 +145,14 @@ class RRDBNet(nn.Module):
 def train(device):
   config = cp.ConfigParser()
   config.read("config.ini")
-  rrdb4x_filepath = f"Models/{config['MODEL']['psnr_4x']}"
+  rrdb4x_filepath = config['MODEL']['psnr_4x']
   
   # Models
   model, epoch, iter = RRDBNet.load(rrdb4x_filepath)
   model = model.to(device)
 
   # Data
-  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=256)
+  dataset = UpscaleDataset(filepath="Datasets/Wallpapers/Train3", in_size=64, out_size=128)
   loader = DataLoader(dataset, batch_size=16, shuffle=True)
   
   # Loss
