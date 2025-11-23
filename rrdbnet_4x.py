@@ -193,7 +193,7 @@ def train(device):
       if iter % 100 == 0:
         last_saved = f"Epoch {i+1} batch {j}"
         prog_bar.set_postfix(loss=last_loss, saved=last_saved)
-        RRDBNet.save(model, rrdb16x_filepath, i, iter)
+        RRDBNet.save(model, rrdb4x_filepath, i, iter)
 
 def test(device):
   config = cp.ConfigParser()
