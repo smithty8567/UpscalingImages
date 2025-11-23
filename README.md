@@ -39,6 +39,7 @@ Here is the [link](https://drive.google.com/drive/folders/1sFOUnEaiIQW57rGBu1H1b
   - Testing models on specific images
 
 ## Example Usage
+### Running Tests
 1. Download `sr_gen_final.pt`.
 2. Change `generator` in `config.ini` to the location of the downloaded model.
 3. Download the dataset provided or use your own.
@@ -48,6 +49,17 @@ Here is the [link](https://drive.google.com/drive/folders/1sFOUnEaiIQW57rGBu1H1b
 ```shell
 python esrgan.py --test
 ```
+### Running on Images
+1. Download `sr_gen_final.pt`.
+2. Change `generator` in `config.ini` to the location of the downloaded model.
+3. Run the following command in your terminal:
+
+```shell
+python upscale.py input.png
+```
+- The first parameter is the input image path (default: input.png)
+- The second parameter is the output image path (default: output.png)
+- The third parameter is the resize factor before upscaling (default: 1)
 
 ## Training Process
 ### Base 4x Upscaling `rrdbnet_4x.py`

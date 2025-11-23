@@ -4,7 +4,7 @@ from esrgan import Generator
 import configparser as cp
 import sys
 
-def upscale_image(target_path="target.png", input_path="input.png", output_path="output.png", device="cpu"):
+def upscale_image(input_path="input.png", output_path="output.png", resize=None, device="cpu"):
   config = cp.ConfigParser()
   config.read("config.ini")
   gen_filepath = config['MODEL']['generator']
@@ -13,9 +13,12 @@ def upscale_image(target_path="target.png", input_path="input.png", output_path=
   model = model.to(device)
   model.eval()
 
-  x = cv2.imread(target_path)
-  x = cv2.resize(x, (x.shape[1] // 2, x.shape[0] // 2))
-  x = cv2.imwrite(input_path, x)
+  x = cv2.imread(input_path)
+  
+  if resize is not None:
+    x = cv2.resize(x, (x.shape[1] // resize, x.shape[0] // resize))
+    cv2.imwrite("resized.png", x)
+  
   x = torch.from_numpy(x).unsqueeze(0).permute(0, 3, 1, 2).float() / 255
   x = x.to(device)
 
@@ -27,7 +30,7 @@ def upscale_image(target_path="target.png", input_path="input.png", output_path=
 
 if __name__ == "__main__":
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-  target_path = sys.argv[1] if len(sys.argv) > 1 else "target.png"
-  input_path = sys.argv[2] if len(sys.argv) > 2 else "input.png"
-  output_path = sys.argv[3] if len(sys.argv) > 3 else "output.png"
-  upscale_image(target_path, input_path, output_path, device)
+  input_path = sys.argv[1] if len(sys.argv) > 1 else "input.png"
+  output_path = sys.argv[2] if len(sys.argv) > 2 else "output.png"
+  resize = int(sys.argv[3]) if len(sys.argv) > 3 else None
+  upscale_image(input_path, output_path, resize, device)
