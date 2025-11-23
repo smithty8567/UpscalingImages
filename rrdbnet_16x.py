@@ -69,8 +69,8 @@ class RRDBNet16x(nn.Module):
 def train(device):
   config = cp.ConfigParser()
   config.read("config.ini")
-  rrdb4x_filepath = f"Models/{config['MODEL']['psnr_4x']}"
-  rrdb16x_filepath = f"Models/{config['MODEL']['psnr_16x']}"
+  rrdb4x_filepath = config['MODEL']['psnr_4x']
+  rrdb16x_filepath = config['MODEL']['psnr_16x']
 
   # Models
   model, epoch, iter = RRDBNet16x.load(rrdb16x_filepath, rrdb4x_filepath)
