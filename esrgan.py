@@ -184,14 +184,16 @@ def train(device):
   adv_total_loss = 0
   prc_total_loss = 0
   l1_total_loss = 0
+  n_loss_gen = 0
+  n_loss_dis = 0
 
   for i in range(epoch, 10000):
     prog_bar = tqdm(loader)
     for j, (batch_input, batch_target) in enumerate(prog_bar):
       iter += 1
       
-      set_lr(gen_opt, iter // 5)
-      set_lr(dis_opt, iter // 5)
+      set_lr(gen_opt, iter // 2)
+      set_lr(dis_opt, iter // 2)
 
       batch_input = batch_input.to(device)
       batch_target = batch_target.to(device)
@@ -221,6 +223,7 @@ def train(device):
 
         log.log_metric('dis_loss', dis_loss.item())
         dis_total_loss += dis_loss.item()
+        n_loss_dis += 1
       else:
         # 2) Train Generator
         gen_opt.zero_grad()
@@ -240,7 +243,7 @@ def train(device):
 
         l1_loss = l1_loss_fn(sr, batch_target)
         perceptual_loss = perceptual_loss_fn(sr * 2 - 1, batch_target * 2 - 1).mean()
-        gen_loss = perceptual_loss + 0.01 * l1_loss + 0.001 * adv_loss
+        gen_loss = perceptual_loss + 0.05 * l1_loss + 0.001 * adv_loss
 
         gen_loss.backward()
         torch.nn.utils.clip_grad_norm_(gen.parameters(), 1.0)
@@ -254,13 +257,16 @@ def train(device):
         adv_total_loss += adv_loss.item()
         prc_total_loss += perceptual_loss.item()
         l1_total_loss += l1_loss.item()
+        n_loss_gen += 1
 
       if iter % 100 == 0:
-        dis_loss, dis_total_loss = dis_total_loss / 80, 0
-        gen_loss, gen_total_loss = gen_total_loss / 20, 0
-        adv_loss, adv_total_loss = adv_total_loss / 20, 0
-        prc_loss, prc_total_loss = prc_total_loss / 20, 0
-        l1_loss, l1_total_loss = l1_total_loss / 20, 0
+        dis_loss, dis_total_loss = dis_total_loss / n_loss_dis, 0
+        gen_loss, gen_total_loss = gen_total_loss / n_loss_gen, 0
+        adv_loss, adv_total_loss = adv_total_loss / n_loss_gen, 0
+        prc_loss, prc_total_loss = prc_total_loss / n_loss_gen, 0
+        l1_loss, l1_total_loss = l1_total_loss / n_loss_gen, 0
+        n_loss_dis = 0
+        n_loss_gen = 0
         prog_bar.set_postfix(gen_loss=gen_loss, dis_loss=dis_loss, adv_loss=adv_loss, prc_loss=prc_loss, l1_loss=l1_loss)
         Generator.save(gen, gen_filepath, i, iter)
         Discriminator.save(dis, dis_filepath, i, iter)
