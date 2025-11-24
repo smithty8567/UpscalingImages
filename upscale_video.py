@@ -1,3 +1,4 @@
+import os
 import cv2
 import torch
 import torch
@@ -5,6 +6,8 @@ from esrgan import Generator
 import configparser as cp
 import sys
 import numpy as np
+from tqdm import tqdm
+from moviepy.editor import VideoFileClip, AudioFileClip
 
 def get_model(device="cpu"):
   config = cp.ConfigParser()
@@ -17,72 +20,52 @@ def get_model(device="cpu"):
 
   return model
 
-def live(size, device, flip=True, path = 0):
+def make_video(infile=0, outfile="output.mp4", downsize=1, device="cpu"):
+  reader = cv2.VideoCapture(infile)
+  w = int(reader.get(cv2.CAP_PROP_FRAME_WIDTH) / downsize) * 4
+  h = int(reader.get(cv2.CAP_PROP_FRAME_HEIGHT) / downsize) * 4
+  fps = reader.get(cv2.CAP_PROP_FPS)
+  frame_size = (w * 2, h)
+  codec = cv2.VideoWriter_fourcc(*'mp4v')
+  writer = cv2.VideoWriter(outfile, codec, fps, frame_size)
   model = get_model(device)
-
-  cap = cv2.VideoCapture(path)
-  w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) * 4)
-  h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) * 4)
-  fps = cap.get(cv2.CAP_PROP_FPS)
-  writer = cv2.VideoWriter('output.mp4', -1, fps, (h, w * 2))
-  downscale_factor = 4
-
-  if not cap.isOpened():
-    print("Could not open webcam")
-    exit()
-
-  print("Press 'q' to quit.")
-
-  while True:
-    ret, frame = cap.read()
+  n_frames = int(reader.get(cv2.CAP_PROP_FRAME_COUNT))
+  for _ in tqdm(range(n_frames)):
+    ret, frame = reader.read()
     if not ret: break
-    frame = frame.astype(np.float32) / 255
-    if flip: frame = frame[:,::-1]
-    inp = cv2.resize(
-      frame,
-      (h // downscale_factor, w // downscale_factor),
-      interpolation=cv2.INTER_CUBIC
-    )
-    inp_img = cv2.resize(
-      inp,
-      (h, w),
-      interpolation=cv2.INTER_CUBIC
-    )
-
-    # hight, width, _  = frame.shape
-    # if hight < width:
-    #   diff = (width - hight)//2
-    #   frame = frame[:,diff:width-diff]
-    # if hight > width:
-    #   diff = (hight - width)//2
-    #   frame = frame[diff:hight-diff, :]
-    # inp = cv2.resize(
-    #   frame,
-    #   (size, size),
-    #   interpolation=cv2.INTER_NEAREST
-    # )
-    # inp_img = cv2.resize(
-    #   inp,
-    #   (h, w),
-    #   interpolation=cv2.INTER_NEAREST
-    # )
-
-    inp = cv2.cvtColor(inp, cv2.COLOR_BGR2RGB)
-    inp = torch.tensor(inp, dtype=torch.float32).permute(2,0,1)
-    inp = inp.unsqueeze(0).to(device)  # [1,3,H,W]
-    with torch.no_grad(): out = model(inp)  # [1,3,H,W]
-    out_img = out.squeeze().cpu().clamp(0, 1).permute(1,2,0)
-    out_img = cv2.cvtColor(np.array(out_img), cv2.COLOR_RGB2BGR)
+    inp = cv2.resize(frame, (h // 4, w // 4), interpolation=cv2.INTER_CUBIC)
+    inp_img = cv2.resize(inp, (h, w), interpolation=cv2.INTER_CUBIC)
+    with torch.no_grad():
+      inp_t = cv2.cvtColor(inp, cv2.COLOR_BGR2RGB)
+      inp_t = torch.tensor(inp_t, dtype=torch.float32).permute(2,0,1).unsqueeze(0) / 255
+      out = model(inp_t.to(device))
+      out_img = out.squeeze().cpu().permute(1,2,0).numpy()
+      out_img = cv2.cvtColor(out_img, cv2.COLOR_RGB2BGR)
+      out_img = (out_img * 255).clip(0, 255).astype(np.uint8)
     combined = np.hstack((inp_img, out_img))
     writer.write(combined)
-    cv2.imshow("Camera (left)  |  Model Output (right)", combined)
+    cv2.imshow("Input (left)  |  Upscaled (right)", combined)
     if cv2.waitKey(1) & 0xFF == ord('q'): break
-  
-  cap.release()
+  reader.release()
   writer.release()
   cv2.destroyAllWindows()
+  if infile != 0:
+    add_audio_to_video(infile, outfile)
+
+def add_audio_to_video(input_video, output_video):
+  try:
+    outfile = os.path.splitext(output_video)[0]
+    audio = AudioFileClip(input_video)
+    video = VideoFileClip(output_video)
+    video = video.set_audio(audio)
+    video.write_videofile(f"{outfile}_with_audio.mp4", codec='libx264', audio_codec='aac', verbose=False, logger=None)
+    os.remove(output_video)
+  except Exception as e:
+    print(f"Error adding audio to video: {e}")
 
 if __name__ == "__main__":
   device = "cuda" if torch.cuda.is_available() else "cpu"
-  file = sys.argv[1] if len(sys.argv) > 1 else 0
-  live(64, device, file == 0, file)
+  infile = sys.argv[1] if len(sys.argv) > 1 else 0
+  outfile = sys.argv[2] if len(sys.argv) > 2 else "output.mp4"
+  downsize = int(sys.argv[3]) if len(sys.argv) > 3 else 1
+  make_video(infile, outfile, downsize, device)
