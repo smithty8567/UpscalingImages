@@ -15,14 +15,7 @@ def get_model(device="cpu"):
 
   return model
 
-def upscale_patches(input_path, output_path, resize=None, w=64, h=64, margin=16, device="cpu"):
-  img = cv2.imread(input_path)
-
-  if resize is not None:
-    img = cv2.resize(img, (img.shape[1] // resize, img.shape[0] // resize))
-    cv2.imwrite("resized.png", img)
-
-  model = get_model(device)
+def upscale_patches(img, model, w=256, h=256, margin=32, device="cpu"):
   inp = torch.from_numpy(img).float().permute(2, 0, 1).unsqueeze(0) / 255.0  # BCHW
   inp = inp.to(device)
 
@@ -71,34 +64,33 @@ def upscale_patches(input_path, output_path, resize=None, w=64, h=64, margin=16,
   # Convert to BGR uint8
   output = output.squeeze(0).permute(1, 2, 0).numpy()
   output = (output * 255).clip(0, 255).astype("uint8")
-  cv2.imwrite(output_path, output)
+  return output
 
-def upscale_image(input_path="input.png", output_path="output.png", resize=None, device="cpu"):
-  model = get_model(device)
-
-  x = cv2.imread(input_path)
-  
-  if resize is not None:
-    x = cv2.resize(x, (x.shape[1] // resize, x.shape[0] // resize))
-    cv2.imwrite("resized.png", x)
-  
-  x = torch.from_numpy(x).unsqueeze(0).permute(0, 3, 1, 2).float() / 255
-  x = x.to(device)
+def upscale_image(img, model, device="cpu"):
+  img = torch.from_numpy(img).unsqueeze(0).permute(0, 3, 1, 2).float() / 255
+  img = img.to(device)
 
   with torch.no_grad():
-    sr = model(x)
+    sr = model(img)
+  
   sr = sr.permute(0, 2, 3, 1)[0].cpu().detach().numpy()
   sr = (sr * 255).clip(0, 255).astype('uint8')
 
-  cv2.imwrite(output_path, sr)
+  return sr
 
 if __name__ == "__main__":
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+  print(f"Using device: {device}")
   input_path = sys.argv[1] if len(sys.argv) > 1 else "input.png"
   output_path = sys.argv[2] if len(sys.argv) > 2 else "output.png"
   resize = int(sys.argv[3]) if len(sys.argv) > 3 else None
-  w = int(sys.argv[4]) if len(sys.argv) > 4 else 64
-  h = int(sys.argv[5]) if len(sys.argv) > 5 else 64
-  margin = int(sys.argv[6]) if len(sys.argv) > 6 else 16
-  # upscale_patches(input_path, output_path, resize, w, h, margin, device)
-  upscale_image(input_path, output_path, resize, device)
+  s = int(sys.argv[4]) if len(sys.argv) > 4 else 256
+  margin = int(sys.argv[5]) if len(sys.argv) > 5 else 32
+  model = get_model(device)
+  img = cv2.imread(input_path)
+  if resize is not None and resize != 1:
+    img = cv2.resize(img, (img.shape[1] // resize, img.shape[0] // resize))
+    cv2.imwrite("resized.png", img)
+  out = upscale_patches(img, model, s, s, margin, device)
+  # out = upscale_image(img, model, device)
+  cv2.imwrite(output_path, out)

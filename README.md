@@ -45,7 +45,6 @@ Here is the [link](https://drive.google.com/drive/folders/1sFOUnEaiIQW57rGBu1H1b
 3. Download the dataset provided or use your own.
 4. Change `test_data` in `config.ini` to the location of your test images.
 5. Run the following command in your terminal:
-
 ```shell
 python esrgan.py --test
 ```
@@ -53,13 +52,24 @@ python esrgan.py --test
 1. Download `sr_gen_final.pt`.
 2. Change `generator` in `config.ini` to the location of the downloaded model.
 3. Run the following command in your terminal:
-
 ```shell
 python upscale.py input.png
 ```
 - The first parameter is the input image path (default: input.png)
 - The second parameter is the output image path (default: output.png)
 - The third parameter is the resize factor before upscaling (default: 1)
+- The fourth parameter is the patch size (default: 256)
+- The fifth parameter is the context margin (default: 32)
+### Webcam & Creating Videos
+1. Download `sr_gen_final.pt`.
+2. Change `generator` in `config.ini` to the location of the downloaded model.
+3. Run the following command in your terminal:
+```shell
+python upscale_video.py 6
+```
+- The first parameter is the downscale factor (running on large images can be resource intensive)
+- The second parameter is the input video path (default: 0: webcam)
+- The third parameter is the output video path
 
 ## Training Process
 ### Base 4x Upscaling `rrdbnet_4x.py`
