@@ -47,11 +47,11 @@ def make_video(infile=0, outfile="output.mp4", downsize=1, device="cpu"):
       out_img = cv2.cvtColor(out_img, cv2.COLOR_RGB2BGR)
       out_img = (out_img * 255).clip(0, 255).astype(np.uint8)
     combined = np.hstack((inp_img, out_img))
+    if infile != 0: writer.write(combined)
     if combined.shape[1] < min_width:
       new_width = min_width
       new_height = int(new_width / combined.shape[1] * combined.shape[0])
       combined = cv2.resize(combined, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
-    if infile != 0: writer.write(combined)
     cv2.imshow("Input (left)  |  Upscaled (right)", combined)
     if cv2.waitKey(1) & 0xFF == ord('q'): break
   cv2.destroyAllWindows()
